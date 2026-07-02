@@ -43,46 +43,56 @@ with tab_picks:
     target_gw = 1 
     
     try:
-        res = supabase.table("fixtures").select("*").eq("gameweek", target_gw).order("kickoff_time").execute()
-        fixtures = res.data
+        # Fetch fixtures dynamically without forcing integer types onto the SQL filter
+        res = supabase.table("fixtures").select("*").order("kickoff_time").execute()
+        all_fixtures = res.data
         
-        if not fixtures:
-            st.info("No fixtures found in database for Gameweek 1. Go to Admin Toolkit and run the sync engine.")
+        if not all_fixtures:
+            st.info("No fixtures found in database. Go to Admin Toolkit and run the sync engine.")
         else:
-            burned_teams = [] 
-            epl_fixtures = [f for f in fixtures if f["league_id"] == 39]
-            spfl_fixtures = [f for f in fixtures if f["league_id"] == 179]
+            # Type-safe filtering: Convert the database's gameweek values to float or int safely in Python
+            fixtures = [
+                f for f in all_fixtures 
+                if f.get("gameweek") is not null and int(float(f["gameweek"])) == target_gw
+            ]
             
-            def render_league_fixtures(league_title, league_list):
-                if league_list:
-                    st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
-                    for f in league_list:
-                        try:
-                            kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
-                            kickoff_display = kickoff.strftime("%a %H:%M")
-                        except:
-                            kickoff_display = str(f["kickoff_time"])
-                        
-                        st.markdown(f"""
-                        <div class='match-card'>
-                            <strong>{f['home_team']}</strong> vs <strong>{f['away_team']}</strong><br/>
-                            <small style='color: #94a3b8;'>📅 Kickoff: {kickoff_display}</small>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        options = ["-- Choose Team --", f['home_team'], f['away_team']]
-                        clean_options = [opt for opt in options if opt not in burned_teams]
-                        
-                        st.selectbox(
-                            f"Lock selection for {f['home_team']} v {f['away_team']}", 
-                            clean_options, 
-                            key=f"sel_{f['id']}"
-                        )
-                else:
-                    st.write(f"ℹ️ No fixtures found for {league_title}.")
-            
-            render_league_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
-            render_league_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
+            if not fixtures:
+                st.info(f"No matching matches discovered in database specifically matching Gameweek {target_gw}.")
+            else:
+                burned_teams = [] 
+                epl_fixtures = [f for f in fixtures if f["league_id"] == 39]
+                spfl_fixtures = [f for f in fixtures if f["league_id"] == 179]
+                
+                def render_league_fixtures(league_title, league_list):
+                    if league_list:
+                        st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
+                        for f in league_list:
+                            try:
+                                kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
+                                kickoff_display = kickoff.strftime("%a %H:%M")
+                            except:
+                                kickoff_display = str(f["kickoff_time"])
+                            
+                            st.markdown(f"""
+                            <div class='match-card'>
+                                <strong>{f['home_team']}</strong> vs <strong>{f['away_team']}</strong><br/>
+                                <small style='color: #94a3b8;'>📅 Kickoff: {kickoff_display}</small>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            options = ["-- Choose Team --", f['home_team'], f['away_team']]
+                            clean_options = [opt for opt in options if opt not in burned_teams]
+                            
+                            st.selectbox(
+                                f"Lock selection for {f['home_team']} v {f['away_team']}", 
+                                clean_options, 
+                                key=f"sel_{f['id']}"
+                            )
+                    else:
+                        st.write(f"ℹ️ No active fixtures found for {league_title} this round.")
+                
+                render_league_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
+                render_league_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
             
     except Exception as e:
         st.error(f"Error drawing layout: {e}")
@@ -100,7 +110,6 @@ with tab_admin:
             "x-rapidapi-host": "v3.football.api-sports.io"
         }
         
-        # Switched to 2024 to fully satisfy Free Tier API token restrictions
         leagues = [39, 179]
         season = 2024  
         
