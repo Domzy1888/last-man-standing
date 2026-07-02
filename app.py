@@ -60,7 +60,7 @@ with tab_picks:
         if not all_fixtures:
             st.info("No fixtures found in database. Go to Admin Toolkit and run the sync engine.")
         else:
-            # Filter matches for the targeted gameweek round safely (Fixed NameError)
+            # Filter matches for the targeted gameweek round safely 
             fixtures = [
                 f for f in all_fixtures 
                 if f.get("gameweek") is not None and int(float(f["gameweek"])) == target_gw
@@ -85,7 +85,7 @@ with tab_picks:
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                # Traditional LMS Selection: Filter out any previously burned squads
+                # Filter out any previously burned squads
                 selectable_options = ["-- Select Team --"] + [team for team in available_teams if team not in burned_teams]
                 
                 selected_pick = st.selectbox(
