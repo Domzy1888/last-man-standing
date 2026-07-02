@@ -21,8 +21,6 @@ def sync_fixtures():
     leagues = [39, 179]
     season = 2025  
     
-    print("🔄 Starting live fixture sync from API-Football...")
-    
     for league_id in leagues:
         params = {"league": league_id, "season": season}
         
@@ -30,7 +28,13 @@ def sync_fixtures():
             response = requests.get(url, headers=headers, params=params)
             data = response.json()
             
+            # Diagnostic screen alert if API key or parameters fail
+            if "errors" in data and data["errors"]:
+                st.error(f"API Error for League {league_id}: {data['errors']}")
+                continue
+                
             if "response" not in data or not data["response"]:
+                st.warning(f"No match data returned from API for League {league_id}.")
                 continue
                 
             fixtures_to_upsert = []
@@ -41,17 +45,21 @@ def sync_fixtures():
                 home = item["teams"]["home"]["name"]
                 away = item["teams"]["away"]["name"]
                 
-                round_str = item["league"]["round"]
+                # Fixed extraction: Safe numeric checking to prevent internal loop crashes
+                round_str = item["league"].get("round", "")
                 digits = ''.join(filter(str.isdigit, round_str))
                 if not digits:
-                    continue
+                    continue  # Skips unnumbered play-offs or non-regular season rounds cleanly
                 gameweek = int(digits)
                 
                 winner = None
                 if status == "FT":
-                    if item["teams"]["home"]["winner"]: winner = home
-                    elif item["teams"]["away"]["winner"]: winner = away
-                    else: winner = "DRAW"
+                    if item["teams"]["home"].get("winner") is True: 
+                        winner = home
+                    elif item["teams"]["away"].get("winner") is True: 
+                        winner = away
+                    else: 
+                        winner = "DRAW"
                 
                 fixtures_to_upsert.append({
                     "id": fixture_id,
@@ -63,19 +71,14 @@ def sync_fixtures():
                     "status": status,
                     "winner": winner
                 })
-                
-                # BATCHING FIX: Save data immediately in small batches of 20 
-                # to stay ahead of the Streamlit server timeout limit.
-                if len(fixtures_to_upsert) >= 20:
-                    supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                    fixtures_to_upsert = [] # Clear the batch
             
-            # Save any remaining records
+            # Save records in bulk immediately per league
             if fixtures_to_upsert:
                 supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
+                st.toast(f"Synchronized {len(fixtures_to_upsert)} matches for league {league_id}!")
                 
         except Exception as e:
-            print(f"❌ Error syncing league {league_id}: {str(e)}")
+            st.error(f"System error processing league {league_id}: {str(e)}")
 
 if __name__ == "__main__":
     sync_fixtures()
