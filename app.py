@@ -1,10 +1,12 @@
 import streamlit as st
 import datetime
+import requests
 from supabase import create_client
 
 # Initialize Supabase Client Connection
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+API_KEY = st.secrets["FOOTBALL_API_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 st.set_page_config(page_title="SQUAD LOCK // LMS", page_icon="⚽", layout="wide")
@@ -83,15 +85,79 @@ with tab_picks:
             render_league_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
             
     except Exception as e:
-        st.error(f"Error drawing structural layout options: {e}")
+        st.error(f"Error drawing layout: {e}")
 
 with tab_lobby:
     st.subheader("The Weekend Sweat Feed")
 
 with tab_admin:
     st.subheader("System Administration Panel")
+    
     if st.button("Run Live Fixture Refresher"):
-        from sync_fixtures import sync_fixtures
-        with st.spinner("Re-syncing latest data arrays..."):
-            sync_fixtures()
-            st.success("Refresher process finalized!")
+        st.warning("⚠️ Running Live Check Directly inside Main Loop...")
+        
+        url = "https://v3.football.api-sports.io/fixtures"
+        headers = {
+            "x-rapidapi-key": API_KEY,
+            "x-rapidapi-host": "v3.football.api-sports.io"
+        }
+        
+        # Test directly with 2025 to prove the layout works
+        leagues = [39, 179]
+        season = 2025  
+        
+        for league_id in leagues:
+            st.write(f"📡 Requesting League `{league_id}`, Season `{season}`...")
+            try:
+                response = requests.get(url, headers=headers, params={"league": league_id, "season": season})
+                data = response.json()
+                
+                # Check 1: Did the API throw an error message?
+                if "errors" in data and data["errors"]:
+                    st.error(f"❌ API explicitly rejected request for League {league_id}: {data['errors']}")
+                    continue
+                
+                # Check 2: Did it return anything inside response?
+                items = data.get("response", [])
+                st.write(f"📥 Received `{len(items)}` match rows from API.")
+                
+                fixtures_to_upsert = []
+                for item in items:
+                    fixture_id = item["fixture"]["id"]
+                    kickoff = item["fixture"]["date"]
+                    status = item["fixture"]["status"]["short"]
+                    home = item["teams"]["home"]["name"]
+                    away = item["teams"]["away"]["name"]
+                    
+                    round_str = item["league"].get("round", "")
+                    digits = ''.join(filter(str.isdigit, round_str))
+                    if not digits:
+                        continue
+                    gameweek = int(digits)
+                    
+                    winner = None
+                    if status == "FT":
+                        if item["teams"]["home"].get("winner") is True: winner = home
+                        elif item["teams"]["away"].get("winner") is True: winner = away
+                        else: winner = "DRAW"
+                    
+                    fixtures_to_upsert.append({
+                        "id": fixture_id,
+                        "league_id": league_id,
+                        "gameweek": gameweek,
+                        "kickoff_time": kickoff,
+                        "home_team": home,
+                        "away_team": away,
+                        "status": status,
+                        "winner": winner
+                    })
+                
+                if fixtures_to_upsert:
+                    st.write(f"⏳ Attempting write of `{len(fixtures_to_upsert)}` entries to Supabase...")
+                    supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
+                    st.success(f"✅ Successfully written rows for League {league_id}!")
+                else:
+                    st.error("❌ Processed 0 rows. No matching valid gameweeks parsed.")
+                    
+            except Exception as e:
+                st.error(f"💥 Critical Crash: {str(e)}")
