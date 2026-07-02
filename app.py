@@ -10,7 +10,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --- Initialize Application Config ---
 st.set_page_config(page_title="SQUAD LOCK // LMS", page_icon="⚽", layout="wide")
 
-# Custom Application Styling (Fixed parameter name here)
+# Custom Application Styling
 st.markdown("""
 <style>
 .custom-metric { background: #1e293b; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #334155; }
@@ -27,12 +27,12 @@ st.caption("EPL & William Hill Premiership Last Man Standing")
 players_list = ["Callum", "Jamie", "Ross", "Stuart", "Chris"]
 current_user = st.sidebar.selectbox("👤 Select Your Player Profile", players_list)
 
-# --- Stable Manual Scoreboard Analytics ---
+# --- Stable Scoreboard Analytics ---
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.markdown(f'<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
 with col2:
-    st.markdown(f'<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div></div>', unsafe_allow_html=True)
 with col3:
     st.markdown(f'<div class="custom-metric"><small>Total Survivors</small><div class="metric-val">{len(players_list)}</div></div>', unsafe_allow_html=True)
 
@@ -43,25 +43,36 @@ tab_picks, tab_lobby, tab_admin = st.tabs(["🎯 Make Your Pick", "📊 Live Lob
 
 with tab_picks:
     st.subheader("Available Matches")
-    target_gw = 1 
     
     try:
-        res = supabase.table("fixtures").select("*").eq("gameweek", target_gw).order("kickoff_time").execute()
+        # Fetch fixtures dynamically
+        res = supabase.table("fixtures").select("*").order("kickoff_time").execute()
         fixtures = res.data
         
         if not fixtures:
-            st.info("No fixtures found in database for this Gameweek yet. Run sync engine.")
+            st.info("No fixtures found in database. Go to Admin Toolkit and run the sync engine.")
         else:
             burned_teams = [] 
-            epl_fixtures = [f for f in fixtures if f["league_id"] == 39]
-            spfl_fixtures = [f for f in fixtures if f["league_id"] == 75]
+            
+            # Smart Filter: Capture either integer 1 or text string "Regular Season - 1"
+            gw_fixtures = [
+                f for f in fixtures 
+                if str(f.get("gameweek", "")).endswith("- 1") or str(f.get("gameweek", "")) == "1"
+            ]
+            
+            # Separate teams using correct API-Football values (EPL = 39, SPFL = 179)
+            epl_fixtures = [f for f in gw_fixtures if f["league_id"] == 39]
+            spfl_fixtures = [f for f in gw_fixtures if f["league_id"] == 179]
             
             def render_league_fixtures(league_title, league_list):
                 if league_list:
                     st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
                     for f in league_list:
-                        kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
-                        kickoff_display = kickoff.strftime("%a %H:%M")
+                        try:
+                            kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
+                            kickoff_display = kickoff.strftime("%a %H:%M")
+                        except:
+                            kickoff_display = str(f["kickoff_time"])
                         
                         st.markdown(f"""
                         <div class='match-card'>
@@ -73,15 +84,13 @@ with tab_picks:
                         options = ["-- Choose Team --", f['home_team'], f['away_team']]
                         clean_options = [opt for opt in options if opt not in burned_teams]
                         
-                        selected_team = st.selectbox(
+                        st.selectbox(
                             f"Lock selection for {f['home_team']} v {f['away_team']}", 
                             clean_options, 
                             key=f"sel_{f['id']}"
                         )
-                        
-                        if selected_team != "-- Choose Team --":
-                            if st.button(f"Confirm Pick: {selected_team}", key=f"btn_{f['id']}"):
-                                st.success(f"Locked in {selected_team} for Gameweek {target_gw}!")
+                else:
+                    st.write(f"ℹ️ No matching round-1 fixtures discovered for {league_title}.")
             
             render_league_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
             render_league_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
@@ -99,4 +108,4 @@ with tab_admin:
         from sync_fixtures import sync_fixtures
         with st.spinner("Re-syncing latest data arrays..."):
             sync_fixtures()
-            st.success("Schedules updated!")
+            st.success("Schedules updated! Refresh your page.")
