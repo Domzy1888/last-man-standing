@@ -2,22 +2,23 @@ import streamlit as st
 import datetime
 from supabase import create_client
 
-# 1. Initialize Supabase Client
+# 1. Initialize Supabase Client Connection
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- Modern App Styling & Theming ---
+# --- Initialize Application Config ---
 st.set_page_config(page_title="SQUAD LOCK // LMS", page_icon="⚽", layout="wide")
 
-css = """
+# Custom Application Styling
+st.markdown("""
 <style>
-div[data-testid="stMetricValue"] { font-size: 1.8rem; font-weight: 800; color: #38bdf8; }
+.custom-metric { background: #1e293b; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #334155; }
+.metric-val { font-size: 1.8rem; font-weight: 800; color: #38bdf8; }
 .league-header { background: #1e293b; padding: 10px; border-radius: 6px; margin: 15px 0 10px 0; font-weight: bold; }
 .match-card { border: 1px solid #334155; padding: 12px; border-radius: 8px; margin-bottom: 10px; background-color: #0f172a; }
 </style>
-"""
-st.markdown(css, unsafe_with_html=True)
+""", unsafe_with_html=True)
 
 st.title("⚽ SQUAD LOCK")
 st.caption("EPL & William Hill Premiership Last Man Standing")
@@ -26,14 +27,14 @@ st.caption("EPL & William Hill Premiership Last Man Standing")
 players_list = ["Callum", "Jamie", "Ross", "Stuart", "Chris"]
 current_user = st.sidebar.selectbox("👤 Select Your Player Profile", players_list)
 
-# --- Top App Scoreboard Analytics ---
+# --- Stable Manual Scoreboard Analytics ---
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric(label="Your Status", value="ALIVE")
+    st.markdown(f'<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_with_html=True)
 with col2:
-    st.metric(label="Current Round", value="Gameweek 1")
+    st.markdown(f'<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div></div>', unsafe_with_html=True)
 with col3:
-    st.metric(label="Total Survivors", value=str(len(players_list)))
+    st.markdown(f'<div class="custom-metric"><small>Total Survivors</small><div class="metric-val">{len(players_list)}</div></div>', unsafe_with_html=True)
 
 st.divider()
 
