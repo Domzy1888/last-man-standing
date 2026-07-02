@@ -94,17 +94,15 @@ with tab_admin:
     st.subheader("System Administration Panel")
     
     if st.button("Run Live Fixture Refresher"):
-        st.warning("⚠️ Running Live Check Directly inside Main Loop...")
-        
         url = "https://v3.football.api-sports.io/fixtures"
         headers = {
             "x-rapidapi-key": API_KEY,
             "x-rapidapi-host": "v3.football.api-sports.io"
         }
         
-        # Test directly with 2025 to prove the layout works
+        # Switched to 2024 to fully satisfy Free Tier API token restrictions
         leagues = [39, 179]
-        season = 2025  
+        season = 2024  
         
         for league_id in leagues:
             st.write(f"📡 Requesting League `{league_id}`, Season `{season}`...")
@@ -112,12 +110,10 @@ with tab_admin:
                 response = requests.get(url, headers=headers, params={"league": league_id, "season": season})
                 data = response.json()
                 
-                # Check 1: Did the API throw an error message?
                 if "errors" in data and data["errors"]:
-                    st.error(f"❌ API explicitly rejected request for League {league_id}: {data['errors']}")
+                    st.error(f"❌ API Error for League {league_id}: {data['errors']}")
                     continue
                 
-                # Check 2: Did it return anything inside response?
                 items = data.get("response", [])
                 st.write(f"📥 Received `{len(items)}` match rows from API.")
                 
@@ -153,11 +149,9 @@ with tab_admin:
                     })
                 
                 if fixtures_to_upsert:
-                    st.write(f"⏳ Attempting write of `{len(fixtures_to_upsert)}` entries to Supabase...")
+                    st.write(f"⏳ Syncing `{len(fixtures_to_upsert)}` records down to Supabase...")
                     supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                    st.success(f"✅ Successfully written rows for League {league_id}!")
-                else:
-                    st.error("❌ Processed 0 rows. No matching valid gameweeks parsed.")
+                    st.success(f"✅ Successfully synchronized League {league_id}!")
                     
             except Exception as e:
                 st.error(f"💥 Critical Crash: {str(e)}")
