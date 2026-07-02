@@ -50,10 +50,10 @@ with tab_picks:
         if not all_fixtures:
             st.info("No fixtures found in database. Go to Admin Toolkit and run the sync engine.")
         else:
-            # Type-safe filtering: Convert the database's gameweek values to float or int safely in Python
+            # Type-safe filtering: Convert the database's gameweek values to float or int safely in Python (Fixed None bug)
             fixtures = [
                 f for f in all_fixtures 
-                if f.get("gameweek") is not null and int(float(f["gameweek"])) == target_gw
+                if f.get("gameweek") is not None and int(float(f["gameweek"])) == target_gw
             ]
             
             if not fixtures:
