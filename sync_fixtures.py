@@ -19,7 +19,7 @@ def sync_fixtures():
     
     # 39 = EPL, 179 = Scottish Premiership
     leagues = [39, 179]
-    season = 2025  # Fallback to 2025 to test immediately with active data
+    season = 2025  
     
     print("🔄 Starting live fixture sync from API-Football...")
     
@@ -41,9 +41,11 @@ def sync_fixtures():
                 home = item["teams"]["home"]["name"]
                 away = item["teams"]["away"]["name"]
                 
-                # Turn "Regular Season - 1" into a clean integer (1)
                 round_str = item["league"]["round"]
-                gameweek = int(''.join(filter(str.isdigit, round_str)))
+                digits = ''.join(filter(str.isdigit, round_str))
+                if not digits:
+                    continue
+                gameweek = int(digits)
                 
                 winner = None
                 if status == "FT":
@@ -61,7 +63,14 @@ def sync_fixtures():
                     "status": status,
                     "winner": winner
                 })
+                
+                # BATCHING FIX: Save data immediately in small batches of 20 
+                # to stay ahead of the Streamlit server timeout limit.
+                if len(fixtures_to_upsert) >= 20:
+                    supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
+                    fixtures_to_upsert = [] # Clear the batch
             
+            # Save any remaining records
             if fixtures_to_upsert:
                 supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
                 
