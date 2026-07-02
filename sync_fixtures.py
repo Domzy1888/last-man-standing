@@ -19,7 +19,7 @@ def sync_fixtures():
     
     # 39 = EPL, 179 = Scottish Premiership
     leagues = [39, 179]
-    season = 2026 
+    season = 2025  # Fallback to 2025 to test immediately with active data
     
     print("🔄 Starting live fixture sync from API-Football...")
     
@@ -41,6 +41,7 @@ def sync_fixtures():
                 home = item["teams"]["home"]["name"]
                 away = item["teams"]["away"]["name"]
                 
+                # Turn "Regular Season - 1" into a clean integer (1)
                 round_str = item["league"]["round"]
                 gameweek = int(''.join(filter(str.isdigit, round_str)))
                 
