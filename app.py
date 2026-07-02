@@ -32,9 +32,9 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.markdown(f'<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_with_html=True)
 with col2:
-    st.markdown(f'<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div></div>', unsafe_with_html=True)
+    st.markdown(f'<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div></div>', unsafe_allow_html=True)
 with col3:
-    st.markdown(f'<div class="custom-metric"><small>Total Survivors</small><div class="metric-val">{len(players_list)}</div></div>', unsafe_with_html=True)
+    st.markdown(f'<div class="custom-metric"><small>Total Survivors</small><div class="metric-val">{len(players_list)}</div></div>', unsafe_allow_html=True)
 
 st.divider()
 
@@ -58,7 +58,7 @@ with tab_picks:
             
             def render_league_fixtures(league_title, league_list):
                 if league_list:
-                    st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_with_html=True)
+                    st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
                     for f in league_list:
                         kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
                         kickoff_display = kickoff.strftime("%a %H:%M")
@@ -68,7 +68,7 @@ with tab_picks:
                             <strong>{f['home_team']}</strong> vs <strong>{f['away_team']}</strong><br/>
                             <small style='color: #94a3b8;'>📅 Kickoff: {kickoff_display}</small>
                         </div>
-                        """, unsafe_with_html=True)
+                        """, unsafe_allow_html=True)
                         
                         options = ["-- Choose Team --", f['home_team'], f['away_team']]
                         clean_options = [opt for opt in options if opt not in burned_teams]
