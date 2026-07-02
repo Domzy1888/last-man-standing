@@ -24,11 +24,10 @@ st.markdown("""
 st.title("⚽ SQUAD LOCK")
 st.caption("EPL & William Hill Premiership Last Man Standing")
 
-# --- Simple Session User Selector ---
+# --- Player Profile Setup ---
 players_list = ["Callum", "Jamie", "Ross", "Stuart", "Chris"]
 current_user = st.sidebar.selectbox("👤 Select Your Player Profile", players_list)
 
-# --- Scoreboard Analytics ---
 col1, col2, col3 = st.columns(3)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
@@ -50,24 +49,27 @@ with tab_picks:
         pick_check = supabase.table("user_picks").select("*").eq("user_id", current_user).eq("gameweek", target_gw).execute()
         existing_pick = pick_check.data
         
-        # 2. Fetch all fixtures from database
+        # 2. Query all past selections to "burn" previously chosen squads
+        past_picks_res = supabase.table("user_picks").select("team_picked").eq("user_id", current_user).execute()
+        burned_teams = [p["team_picked"] for p in past_picks_res.data] if past_picks_res.data else []
+        
+        # 3. Fetch all fixtures from database
         res = supabase.table("fixtures").select("*").order("kickoff_time").execute()
         all_fixtures = res.data
         
         if not all_fixtures:
             st.info("No fixtures found in database. Go to Admin Toolkit and run the sync engine.")
         else:
-            # Filter matches for the targeted gameweek round safely
+            # Filter matches for the targeted gameweek round safely (Fixed NameError)
             fixtures = [
                 f for f in all_fixtures 
                 if f.get("gameweek") is not None and int(float(f["gameweek"])) == target_gw
             ]
             
-            # Extract lists for display cards
             epl_fixtures = [f for f in fixtures if f["league_id"] == 39]
             spfl_fixtures = [f for f in fixtures if f["league_id"] == 179]
             
-            # Generate a master list of all individual teams playing this weekend
+            # Generate a master list of all teams playing this weekend
             available_teams = sorted(list(set(
                 [f["home_team"] for f in fixtures] + [f["away_team"] for f in fixtures]
             )))
@@ -76,7 +78,6 @@ with tab_picks:
             st.markdown("### 🔒 Lock In Your Team")
             
             if existing_pick:
-                # Player already has a confirmed choice saved in Supabase
                 locked_team = existing_pick[0]["team_picked"]
                 st.markdown(f"""
                 <div class="locked-box">
@@ -84,8 +85,7 @@ with tab_picks:
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                # Traditional LMS Selection: One unified dropdown menu for the whole week
-                burned_teams = [] # Future proofing space for tracking previously used clubs
+                # Traditional LMS Selection: Filter out any previously burned squads
                 selectable_options = ["-- Select Team --"] + [team for team in available_teams if team not in burned_teams]
                 
                 selected_pick = st.selectbox(
@@ -96,13 +96,12 @@ with tab_picks:
                 if selected_pick != "-- Select Team --":
                     if st.button(f"Confirm & Lock {selected_pick}"):
                         try:
-                            # Write pick array cleanly up to the user_picks table
                             supabase.table("user_picks").insert({
                                 "user_id": current_user,
                                 "gameweek": target_gw,
                                 "team_picked": selected_pick
                             }).execute()
-                            st.success(f"Success! {selected_pick} is saved. Refreshing...")
+                            st.success(f"Success! {selected_pick} is saved.")
                             st.rerun()
                         except Exception as save_err:
                             st.error(f"Failed to submit entry: {save_err}")
@@ -137,13 +136,9 @@ with tab_picks:
 
 with tab_lobby:
     st.subheader("The Weekend Sweat Feed")
-    st.write("Review what squads your mates have locked down for survival.")
-    
     try:
-        # Pull all locked-in choices to show on the public dashboard scoreboard
         lobby_res = supabase.table("user_picks").select("*").eq("gameweek", 1).execute()
         all_picks = lobby_res.data
-        
         if not all_picks:
             st.info("Nobody has locked in a team for Gameweek 1 yet.")
         else:
@@ -154,65 +149,38 @@ with tab_lobby:
 
 with tab_admin:
     st.subheader("System Administration Panel")
-    
     if st.button("Run Live Fixture Refresher"):
         url = "https://v3.football.api-sports.io/fixtures"
         headers = {
             "x-rapidapi-key": API_KEY,
             "x-rapidapi-host": "v3.football.api-sports.io"
         }
-        
         leagues = [39, 179]
         season = 2024  
         
         for league_id in leagues:
-            st.write(f"📡 Requesting League `{league_id}`, Season `{season}`...")
             try:
                 response = requests.get(url, headers=headers, params={"league": league_id, "season": season})
                 data = response.json()
-                
-                if "errors" in data and data["errors"]:
-                    st.error(f"❌ API Error for League {league_id}: {data['errors']}")
-                    continue
-                
                 items = data.get("response", [])
-                st.write(f"📥 Received `{len(items)}` match rows from API.")
-                
                 fixtures_to_upsert = []
                 for item in items:
-                    fixture_id = item["fixture"]["id"]
-                    kickoff = item["fixture"]["date"]
-                    status = item["fixture"]["status"]["short"]
-                    home = item["teams"]["home"]["name"]
-                    away = item["teams"]["away"]["name"]
-                    
                     round_str = item["league"].get("round", "")
                     digits = ''.join(filter(str.isdigit, round_str))
-                    if not digits:
-                        continue
-                    gameweek = int(digits)
-                    
-                    winner = None
-                    if status == "FT":
-                        if item["teams"]["home"].get("winner") is True: winner = home
-                        elif item["teams"]["away"].get("winner") is True: winner = away
-                        else: winner = "DRAW"
+                    if not digits: continue
                     
                     fixtures_to_upsert.append({
-                        "id": fixture_id,
+                        "id": item["fixture"]["id"],
                         "league_id": league_id,
-                        "gameweek": gameweek,
-                        "kickoff_time": kickoff,
-                        "home_team": home,
-                        "away_team": away,
-                        "status": status,
-                        "winner": winner
+                        "gameweek": int(digits),
+                        "kickoff_time": item["fixture"]["date"],
+                        "home_team": item["teams"]["home"]["name"],
+                        "away_team": item["teams"]["away"]["name"],
+                        "status": item["fixture"]["status"]["short"],
+                        "winner": item["teams"]["home"]["name"] if item["teams"]["home"].get("winner") is True else (item["teams"]["away"]["name"] if item["teams"]["away"].get("winner") is True else ("DRAW" if item["fixture"]["status"]["short"] == "FT" else None))
                     })
-                
                 if fixtures_to_upsert:
-                    st.write(f"⏳ Syncing `{len(fixtures_to_upsert)}` records down to Supabase...")
                     supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                    st.success(f"✅ Successfully synchronized League {league_id}!")
-                    
+                    st.success(f"✅ Synchronized League {league_id}!")
             except Exception as e:
-                st.error(f"💥 Critical Crash: {str(e)}")
+                st.error(f"💥 Error: {str(e)}")
