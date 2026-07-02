@@ -10,7 +10,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --- Initialize Application Config ---
 st.set_page_config(page_title="SQUAD LOCK // LMS", page_icon="⚽", layout="wide")
 
-# Custom Application Styling
+# Custom Application Styling (Fixed parameter name here)
 st.markdown("""
 <style>
 .custom-metric { background: #1e293b; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #334155; }
@@ -18,7 +18,7 @@ st.markdown("""
 .league-header { background: #1e293b; padding: 10px; border-radius: 6px; margin: 15px 0 10px 0; font-weight: bold; }
 .match-card { border: 1px solid #334155; padding: 12px; border-radius: 8px; margin-bottom: 10px; background-color: #0f172a; }
 </style>
-""", unsafe_with_html=True)
+""", unsafe_allow_html=True)
 
 st.title("⚽ SQUAD LOCK")
 st.caption("EPL & William Hill Premiership Last Man Standing")
@@ -30,7 +30,7 @@ current_user = st.sidebar.selectbox("👤 Select Your Player Profile", players_l
 # --- Stable Manual Scoreboard Analytics ---
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.markdown(f'<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_with_html=True)
+    st.markdown(f'<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
 with col2:
     st.markdown(f'<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div></div>', unsafe_allow_html=True)
 with col3:
