@@ -2,15 +2,13 @@ import streamlit as st
 import datetime
 from supabase import create_client
 
-# 1. Initialize Supabase Client Connection
+# Initialize Supabase Client Connection
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- Initialize Application Config ---
 st.set_page_config(page_title="SQUAD LOCK // LMS", page_icon="⚽", layout="wide")
 
-# Custom Application Styling
 st.markdown("""
 <style>
 .custom-metric { background: #1e293b; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #334155; }
@@ -23,11 +21,9 @@ st.markdown("""
 st.title("⚽ SQUAD LOCK")
 st.caption("EPL & William Hill Premiership Last Man Standing")
 
-# --- Simple Session User Selector ---
 players_list = ["Callum", "Jamie", "Ross", "Stuart", "Chris"]
 current_user = st.sidebar.selectbox("👤 Select Your Player Profile", players_list)
 
-# --- Stable Manual Scoreboard Analytics ---
 col1, col2, col3 = st.columns(3)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
@@ -38,7 +34,6 @@ with col3:
 
 st.divider()
 
-# --- Main App Core Interfaces ---
 tab_picks, tab_lobby, tab_admin = st.tabs(["🎯 Make Your Pick", "📊 Live Lobby", "⚙️ Admin Toolkit"])
 
 with tab_picks:
@@ -46,7 +41,6 @@ with tab_picks:
     target_gw = 1 
     
     try:
-        # Fetch fixtures for Gameweek 1 out of Supabase
         res = supabase.table("fixtures").select("*").eq("gameweek", target_gw).order("kickoff_time").execute()
         fixtures = res.data
         
@@ -93,7 +87,6 @@ with tab_picks:
 
 with tab_lobby:
     st.subheader("The Weekend Sweat Feed")
-    st.write("Review what squads your mates have locked down for survival.")
 
 with tab_admin:
     st.subheader("System Administration Panel")
@@ -101,4 +94,4 @@ with tab_admin:
         from sync_fixtures import sync_fixtures
         with st.spinner("Re-syncing latest data arrays..."):
             sync_fixtures()
-            st.success("Schedules updated! Switch back to the Picks tab.")
+            st.success("Refresher process finalized!")
