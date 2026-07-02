@@ -10,7 +10,6 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --- Modern App Styling & Theming ---
 st.set_page_config(page_title="SQUAD LOCK // LMS", page_icon="⚽", layout="wide")
 
-# Flattened multi-line CSS block to prevent indentation compile errors
 css = """
 <style>
 div[data-testid="stMetricValue"] { font-size: 1.8rem; font-weight: 800; color: #38bdf8; }
@@ -30,11 +29,11 @@ current_user = st.sidebar.selectbox("👤 Select Your Player Profile", players_l
 # --- Top App Scoreboard Analytics ---
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric(label="Your Status", value="ALIVE", delta="Active Pool")
+    st.metric(label="Your Status", value="ALIVE")
 with col2:
     st.metric(label="Current Round", value="Gameweek 1")
 with col3:
-    st.metric(label="Total Survivors", value=f"{len(players_list)} / {len(players_list)}")
+    st.metric(label="Total Survivors", value=str(len(players_list)))
 
 st.divider()
 
