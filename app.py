@@ -27,7 +27,7 @@ st.caption("EPL & William Hill Premiership Last Man Standing")
 players_list = ["Callum", "Jamie", "Ross", "Stuart", "Chris"]
 current_user = st.sidebar.selectbox("👤 Select Your Player Profile", players_list)
 
-# --- Stable Scoreboard Analytics ---
+# --- Stable Manual Scoreboard Analytics ---
 col1, col2, col3 = st.columns(3)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
@@ -43,26 +43,19 @@ tab_picks, tab_lobby, tab_admin = st.tabs(["🎯 Make Your Pick", "📊 Live Lob
 
 with tab_picks:
     st.subheader("Available Matches")
+    target_gw = 1 
     
     try:
-        # Fetch fixtures dynamically
-        res = supabase.table("fixtures").select("*").order("kickoff_time").execute()
+        # Fetch fixtures for Gameweek 1 out of Supabase
+        res = supabase.table("fixtures").select("*").eq("gameweek", target_gw).order("kickoff_time").execute()
         fixtures = res.data
         
         if not fixtures:
-            st.info("No fixtures found in database. Go to Admin Toolkit and run the sync engine.")
+            st.info("No fixtures found in database for Gameweek 1. Go to Admin Toolkit and run the sync engine.")
         else:
             burned_teams = [] 
-            
-            # Smart Filter: Capture either integer 1 or text string "Regular Season - 1"
-            gw_fixtures = [
-                f for f in fixtures 
-                if str(f.get("gameweek", "")).endswith("- 1") or str(f.get("gameweek", "")) == "1"
-            ]
-            
-            # Separate teams using correct API-Football values (EPL = 39, SPFL = 179)
-            epl_fixtures = [f for f in gw_fixtures if f["league_id"] == 39]
-            spfl_fixtures = [f for f in gw_fixtures if f["league_id"] == 179]
+            epl_fixtures = [f for f in fixtures if f["league_id"] == 39]
+            spfl_fixtures = [f for f in fixtures if f["league_id"] == 179]
             
             def render_league_fixtures(league_title, league_list):
                 if league_list:
@@ -90,7 +83,7 @@ with tab_picks:
                             key=f"sel_{f['id']}"
                         )
                 else:
-                    st.write(f"ℹ️ No matching round-1 fixtures discovered for {league_title}.")
+                    st.write(f"ℹ️ No fixtures found for {league_title}.")
             
             render_league_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
             render_league_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
@@ -108,4 +101,4 @@ with tab_admin:
         from sync_fixtures import sync_fixtures
         with st.spinner("Re-syncing latest data arrays..."):
             sync_fixtures()
-            st.success("Schedules updated! Refresh your page.")
+            st.success("Schedules updated! Switch back to the Picks tab.")
