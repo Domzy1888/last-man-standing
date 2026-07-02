@@ -19,7 +19,7 @@ def sync_fixtures():
     
     # 39 = EPL, 179 = Scottish Premiership
     leagues = [39, 179]
-    season = 2025  
+    season = 2025  # Changed from 2026 to 2025 to grab verified historical data
     
     for league_id in leagues:
         params = {"league": league_id, "season": season}
@@ -28,13 +28,13 @@ def sync_fixtures():
             response = requests.get(url, headers=headers, params=params)
             data = response.json()
             
-            # Diagnostic screen alert if API key or parameters fail
+            # Diagnostic check in case the API encounters account-level trouble
             if "errors" in data and data["errors"]:
                 st.error(f"API Error for League {league_id}: {data['errors']}")
                 continue
                 
             if "response" not in data or not data["response"]:
-                st.warning(f"No match data returned from API for League {league_id}.")
+                st.warning(f"No match data returned from API for League {league_id} Season {season}.")
                 continue
                 
             fixtures_to_upsert = []
@@ -45,11 +45,11 @@ def sync_fixtures():
                 home = item["teams"]["home"]["name"]
                 away = item["teams"]["away"]["name"]
                 
-                # Fixed extraction: Safe numeric checking to prevent internal loop crashes
+                # Check formatting carefully to guarantee integers parse flawlessly
                 round_str = item["league"].get("round", "")
                 digits = ''.join(filter(str.isdigit, round_str))
                 if not digits:
-                    continue  # Skips unnumbered play-offs or non-regular season rounds cleanly
+                    continue  # Skips non-gameweek entries smoothly
                 gameweek = int(digits)
                 
                 winner = None
@@ -72,10 +72,9 @@ def sync_fixtures():
                     "winner": winner
                 })
             
-            # Save records in bulk immediately per league
             if fixtures_to_upsert:
                 supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                st.toast(f"Synchronized {len(fixtures_to_upsert)} matches for league {league_id}!")
+                st.toast(f"Successfully loaded {len(fixtures_to_upsert)} fixtures for league {league_id}!")
                 
         except Exception as e:
             st.error(f"System error processing league {league_id}: {str(e)}")
