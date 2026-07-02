@@ -16,16 +16,19 @@ st.markdown("""
 .custom-metric { background: #1e293b; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #334155; }
 .metric-val { font-size: 1.8rem; font-weight: 800; color: #38bdf8; }
 .league-header { background: #1e293b; padding: 10px; border-radius: 6px; margin: 15px 0 10px 0; font-weight: bold; }
-.match-card { border: 1px solid #334155; padding: 12px; border-radius: 8px; margin-bottom: 10px; background-color: #0f172a; }
+.match-card { border: 1px solid #334155; padding: 12px; border-radius: 8px; margin-bottom: 10px; background-color: #0f172a; line-height: 1.6; }
+.locked-box { background: #065f46; color: #a7f3d0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; margin-bottom: 20px; border: 1px solid #047857; }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("⚽ SQUAD LOCK")
 st.caption("EPL & William Hill Premiership Last Man Standing")
 
+# --- Simple Session User Selector ---
 players_list = ["Callum", "Jamie", "Ross", "Stuart", "Chris"]
 current_user = st.sidebar.selectbox("👤 Select Your Player Profile", players_list)
 
+# --- Scoreboard Analytics ---
 col1, col2, col3 = st.columns(3)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
@@ -43,62 +46,111 @@ with tab_picks:
     target_gw = 1 
     
     try:
-        # Fetch fixtures dynamically without forcing integer types onto the SQL filter
+        # 1. Check if this specific player has already saved a pick for this gameweek
+        pick_check = supabase.table("user_picks").select("*").eq("user_id", current_user).eq("gameweek", target_gw).execute()
+        existing_pick = pick_check.data
+        
+        # 2. Fetch all fixtures from database
         res = supabase.table("fixtures").select("*").order("kickoff_time").execute()
         all_fixtures = res.data
         
         if not all_fixtures:
             st.info("No fixtures found in database. Go to Admin Toolkit and run the sync engine.")
         else:
-            # Type-safe filtering: Convert the database's gameweek values to float or int safely in Python (Fixed None bug)
+            # Filter matches for the targeted gameweek round safely
             fixtures = [
                 f for f in all_fixtures 
                 if f.get("gameweek") is not None and int(float(f["gameweek"])) == target_gw
             ]
             
-            if not fixtures:
-                st.info(f"No matching matches discovered in database specifically matching Gameweek {target_gw}.")
+            # Extract lists for display cards
+            epl_fixtures = [f for f in fixtures if f["league_id"] == 39]
+            spfl_fixtures = [f for f in fixtures if f["league_id"] == 179]
+            
+            # Generate a master list of all individual teams playing this weekend
+            available_teams = sorted(list(set(
+                [f["home_team"] for f in fixtures] + [f["away_team"] for f in fixtures]
+            )))
+            
+            # --- PICK SELECTION AREA ---
+            st.markdown("### 🔒 Lock In Your Team")
+            
+            if existing_pick:
+                # Player already has a confirmed choice saved in Supabase
+                locked_team = existing_pick[0]["team_picked"]
+                st.markdown(f"""
+                <div class="locked-box">
+                    🔒 You have officially locked in {locked_team} for Gameweek {target_gw}!
+                </div>
+                """, unsafe_allow_html=True)
             else:
-                burned_teams = [] 
-                epl_fixtures = [f for f in fixtures if f["league_id"] == 39]
-                spfl_fixtures = [f for f in fixtures if f["league_id"] == 179]
+                # Traditional LMS Selection: One unified dropdown menu for the whole week
+                burned_teams = [] # Future proofing space for tracking previously used clubs
+                selectable_options = ["-- Select Team --"] + [team for team in available_teams if team not in burned_teams]
                 
-                def render_league_fixtures(league_title, league_list):
-                    if league_list:
-                        st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
-                        for f in league_list:
-                            try:
-                                kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
-                                kickoff_display = kickoff.strftime("%a %H:%M")
-                            except:
-                                kickoff_display = str(f["kickoff_time"])
-                            
-                            st.markdown(f"""
-                            <div class='match-card'>
-                                <strong>{f['home_team']}</strong> vs <strong>{f['away_team']}</strong><br/>
-                                <small style='color: #94a3b8;'>📅 Kickoff: {kickoff_display}</small>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            options = ["-- Choose Team --", f['home_team'], f['away_team']]
-                            clean_options = [opt for opt in options if opt not in burned_teams]
-                            
-                            st.selectbox(
-                                f"Lock selection for {f['home_team']} v {f['away_team']}", 
-                                clean_options, 
-                                key=f"sel_{f['id']}"
-                            )
-                    else:
-                        st.write(f"ℹ️ No active fixtures found for {league_title} this round.")
+                selected_pick = st.selectbox(
+                    f"Choose your single survival squad for Gameweek {target_gw}:",
+                    selectable_options
+                )
                 
-                render_league_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
-                render_league_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
+                if selected_pick != "-- Select Team --":
+                    if st.button(f"Confirm & Lock {selected_pick}"):
+                        try:
+                            # Write pick array cleanly up to the user_picks table
+                            supabase.table("user_picks").insert({
+                                "user_id": current_user,
+                                "gameweek": target_gw,
+                                "team_picked": selected_pick
+                            }).execute()
+                            st.success(f"Success! {selected_pick} is saved. Refreshing...")
+                            st.rerun()
+                        except Exception as save_err:
+                            st.error(f"Failed to submit entry: {save_err}")
+            
+            st.divider()
+            
+            # --- FIXTURE DISPLAY CARDS ---
+            def render_league_fixtures(league_title, league_list):
+                if league_list:
+                    st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
+                    for f in league_list:
+                        try:
+                            kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
+                            kickoff_display = kickoff.strftime("%a %H:%M")
+                        except:
+                            kickoff_display = str(f["kickoff_time"])
+                        
+                        st.markdown(f"""
+                        <div class='match-card'>
+                            <strong>{f['home_team']}</strong> vs <strong>{f['away_team']}</strong><br/>
+                            <small style='color: #94a3b8;'>📅 Kickoff: {kickoff_display}</small>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.write(f"ℹ️ No active fixtures found for {league_title} this round.")
+            
+            render_league_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
+            render_league_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
             
     except Exception as e:
         st.error(f"Error drawing layout: {e}")
 
 with tab_lobby:
     st.subheader("The Weekend Sweat Feed")
+    st.write("Review what squads your mates have locked down for survival.")
+    
+    try:
+        # Pull all locked-in choices to show on the public dashboard scoreboard
+        lobby_res = supabase.table("user_picks").select("*").eq("gameweek", 1).execute()
+        all_picks = lobby_res.data
+        
+        if not all_picks:
+            st.info("Nobody has locked in a team for Gameweek 1 yet.")
+        else:
+            for p in all_picks:
+                st.markdown(f"👤 **{p['user_id']}** has locked in **{p['team_picked']}**")
+    except Exception as lobby_err:
+        st.error(f"Could not load lobby data: {lobby_err}")
 
 with tab_admin:
     st.subheader("System Administration Panel")
