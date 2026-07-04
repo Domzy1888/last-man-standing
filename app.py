@@ -179,7 +179,6 @@ with tab_picks:
                         except:
                             kickoff_display = str(f["kickoff_time"])
                         
-                        # High-quality dynamic fallbacks if field strings come up completely blank or null
                         home_logo = f.get("home_logo") if f.get("home_logo") else "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
                         away_logo = f.get("away_logo") if f.get("away_logo") else "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
                         
@@ -221,6 +220,10 @@ with tab_lobby:
 
 with tab_admin:
     st.subheader("System Administration Panel")
+    
+    # Let you adjust the season year right here in the UI to prevent zero-result drops
+    target_season = st.number_input("API Target Season Year", min_value=2020, max_value=2028, value=2024, step=1)
+    
     if st.button("Run Live Fixture Refresher"):
         url = "https://v3.football.api-sports.io/fixtures"
         headers = {
@@ -228,14 +231,21 @@ with tab_admin:
             "x-rapidapi-host": "v3.football.api-sports.io"
         }
         leagues = [39, 179]
-        season = 2024  
         
         for league_id in leagues:
-            st.write(f"📡 Syncing League `{league_id}` details...")
+            st.write(f"📡 Requesting League `{league_id}` data for season `{target_season}`...")
             try:
-                response = requests.get(url, headers=headers, params={"league": league_id, "season": season})
+                response = requests.get(url, headers=headers, params={"league": league_id, "season": target_season})
                 data = response.json()
+                
+                # Debug feedback to see exact API response info if it fails
+                if "errors" in data and data["errors"]:
+                    st.error(f"API Error Response: {data['errors']}")
+                    continue
+                    
                 items = data.get("response", [])
+                st.write(f"Found {len(items)} matches total returned from API.")
+                
                 fixtures_to_upsert = []
                 for item in items:
                     round_str = item["league"].get("round", "")
@@ -254,8 +264,11 @@ with tab_admin:
                         "status": item["fixture"]["status"]["short"],
                         "winner": item["teams"]["home"]["name"] if item["teams"]["home"].get("winner") is True else (item["teams"]["away"]["name"] if item["teams"]["away"].get("winner") is True else ("DRAW" if item["fixture"]["status"]["short"] == "FT" else None))
                     })
+                
                 if fixtures_to_upsert:
                     supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                    st.success(f"✅ Synchronized League {league_id} with Team Badges!")
+                    st.success(f"✅ Successfully written {len(fixtures_to_upsert)} fixtures into database for League {league_id}!")
+                else:
+                    st.warning(f"⚠️ No matching gameweek fixtures filtered out from League {league_id}.")
             except Exception as e:
-                st.error(f"💥 Error: {str(e)}")
+                st.error(f"💥 Processing Failure: {str(e)}")
