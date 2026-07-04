@@ -45,7 +45,7 @@ html, body, [data-testid="stAppViewContainer"] {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 14px;
     font-size: 1.3rem; 
     font-weight: 800; 
     text-transform: uppercase;
@@ -60,13 +60,13 @@ html, body, [data-testid="stAppViewContainer"] {
 .center-vs-group {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     margin: 0 4px;
 }
 
 .team-badge {
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
     object-fit: contain;
 }
 
@@ -92,14 +92,12 @@ html, body, [data-testid="stAppViewContainer"] {
 st.title("⚽ Last Man Standing")
 st.caption("EPL & William Hill Premiership Survival League")
 
-# --- Temporary Player Profile Setup ---
 players_list = ["Callum", "Jamie", "Ross", "Stuart", "Chris"]
 current_user = st.sidebar.selectbox("👤 Select Your Player Profile", players_list)
 
 entrance_fee = 10
 total_prizepot = len(players_list) * entrance_fee
 
-# --- Scoreboard Analytics Dashboard ---
 col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
@@ -143,7 +141,6 @@ with tab_picks:
                 [f["home_team"] for f in fixtures] + [f["away_team"] for f in fixtures]
             )))
             
-            # --- PICK SELECTION AREA ---
             st.markdown("### 🔒 Lock In Your Team")
             
             if existing_pick:
@@ -172,7 +169,6 @@ with tab_picks:
             
             st.divider()
             
-            # --- UNIFIED FLUID LIST VIEW ---
             def render_flat_fixtures(league_title, league_list):
                 if league_list:
                     st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
@@ -183,9 +179,9 @@ with tab_picks:
                         except:
                             kickoff_display = str(f["kickoff_time"])
                         
-                        # Hidden fallback if sync hasn't run yet
-                        home_logo = f.get("home_logo") or "https://media.api-sports.io/football/teams/placeholder.png"
-                        away_logo = f.get("away_logo") or "https://media.api-sports.io/football/teams/placeholder.png"
+                        # High-quality dynamic fallbacks if field strings come up completely blank or null
+                        home_logo = f.get("home_logo") if f.get("home_logo") else "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
+                        away_logo = f.get("away_logo") if f.get("away_logo") else "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
                         
                         st.markdown(f"""
                         <div class='match-row-container'>
@@ -235,6 +231,7 @@ with tab_admin:
         season = 2024  
         
         for league_id in leagues:
+            st.write(f"📡 Syncing League `{league_id}` details...")
             try:
                 response = requests.get(url, headers=headers, params={"league": league_id, "season": season})
                 data = response.json()
