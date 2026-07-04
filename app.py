@@ -101,7 +101,7 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
 with col2:
-    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Upcoming Fixtures</small></div>', unsafe_allow_html=True)
+    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Active Board</small></div>', unsafe_allow_html=True)
 with col3:
     st.markdown(f'<div class="custom-metric"><small>Total Survivors</small><div class="metric-val">{len(players_list)}</div></div>', unsafe_allow_html=True)
 with col4:
@@ -128,13 +128,11 @@ with tab_picks:
         if not all_fixtures:
             st.info("No fixtures found in database. Go to Admin Toolkit and run the sync engine.")
         else:
-            # Safely parse gameweek mappings
             fixtures = [
                 f for f in all_fixtures 
                 if f.get("gameweek") is not None and int(float(f["gameweek"])) == target_gw
             ]
             
-            # Grouping by TheSportsDB Static League IDs
             epl_fixtures = [f for f in fixtures if f["league_id"] == 4328]
             spfl_fixtures = [f for f in fixtures if f["league_id"] == 4338]
             
@@ -202,7 +200,7 @@ with tab_picks:
                         </div>
                         """, unsafe_allow_html=True)
                 else:
-                    st.write(f"ℹ️ No active fixtures mapped for {league_title} in Gameweek {target_gw}.")
+                    st.write(f"ℹ️ No fixtures loaded for {league_title} in Gameweek {target_gw}.")
             
             render_flat_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
             render_flat_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
@@ -225,32 +223,32 @@ with tab_lobby:
 
 with tab_admin:
     st.subheader("TheSportsDB Sync Engine")
-    st.info("Pulls upcoming fixtures directly from the free community directory database.")
     
-    if st.button("Run Free Fixture Refresher"):
-        url = "https://www.thesportsdb.com/api/v1/json/1/eventsnext.php"
+    # Let the admin specify exactly what round number they want to forcefully download
+    sync_gw = st.number_input("Force Sync Gameweek Number", min_value=1, max_value=38, value=1)
+    
+    if st.button("Run Round Fixture Sync"):
+        # Utilizing the completely open round schedule tracker endpoint
+        url = "https://www.thesportsdb.com/api/v1/json/1/eventsround.php"
         leagues = [4328, 4338]
         
         for league_id in leagues:
-            st.write(f"📡 Pulling upcoming schedule lines for League `{league_id}`...")
+            st.write(f"📡 Fetching Round {sync_gw} lines for League ID `{league_id}`...")
             try:
-                response = requests.get(url, params={"id": league_id})
+                response = requests.get(url, params={"id": league_id, "r": sync_gw})
                 data = response.json()
                 items = data.get("events", [])
                 
                 if not items:
-                    st.warning(f"No upcoming matches returned right now for league reference {league_id}.")
+                    st.warning(f"No match events recorded on this round parameter for league reference {league_id}.")
                     continue
                     
                 fixtures_to_upsert = []
                 for item in items:
-                    # Map upcoming round sequences down to Gameweek 1 display buckets
-                    gw_val = item.get("intRound") or 1
-                    
                     fixtures_to_upsert.append({
                         "id": int(item["idEvent"]),
                         "league_id": league_id,
-                        "gameweek": int(gw_val),
+                        "gameweek": sync_gw,
                         "kickoff_time": f"{item['dateEvent']}T{item.get('strTime', '00:00:00')}",
                         "home_team": item["strHomeTeam"],
                         "away_team": item["strAwayTeam"],
@@ -262,6 +260,6 @@ with tab_admin:
                 
                 if fixtures_to_upsert:
                     supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                    st.success(f"✅ Downloaded {len(fixtures_to_upsert)} upcoming games into Supabase table!")
+                    st.success(f"✅ Successfully inserted {len(fixtures_to_upsert)} matches into the database!")
             except Exception as e:
-                st.error(f"💥 Processing error details: {str(e)}")
+                st.error(f"💥 Sync failed: {str(e)}")
