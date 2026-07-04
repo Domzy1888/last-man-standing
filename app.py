@@ -1,6 +1,7 @@
 import streamlit as st
 import datetime
 import requests
+from bs4 import BeautifulSoup
 from supabase import create_client
 
 # Initialize Supabase Client Connection
@@ -101,7 +102,7 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
 with col2:
-    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Active Board</small></div>', unsafe_allow_html=True)
+    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Live Scraped Lines</small></div>', unsafe_allow_html=True)
 with col3:
     st.markdown(f'<div class="custom-metric"><small>Total Survivors</small><div class="metric-val">{len(players_list)}</div></div>', unsafe_allow_html=True)
 with col4:
@@ -126,15 +127,15 @@ with tab_picks:
         all_fixtures = res.data
         
         if not all_fixtures:
-            st.info("No fixtures found in database. Go to Admin Toolkit and run the sync engine.")
+            st.info("No fixtures found in database. Go to Admin Toolkit and scrape fresh fixtures.")
         else:
             fixtures = [
                 f for f in all_fixtures 
                 if f.get("gameweek") is not None and int(float(f["gameweek"])) == target_gw
             ]
             
-            epl_fixtures = [f for f in fixtures if f["league_id"] == 4328]
-            spfl_fixtures = [f for f in fixtures if f["league_id"] == 4338]
+            epl_fixtures = [f for f in fixtures if str(f["league_id"]).upper() == "EPL"]
+            spfl_fixtures = [f for f in fixtures if str(f["league_id"]).upper() == "SPFL"]
             
             available_teams = sorted(list(set(
                 [f["home_team"] for f in fixtures] + [f["away_team"] for f in fixtures]
@@ -172,16 +173,6 @@ with tab_picks:
                 if league_list:
                     st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
                     for f in league_list:
-                        try:
-                            if "T" in str(f["kickoff_time"]):
-                                date_part, time_part = str(f["kickoff_time"]).split("T")
-                                dt = datetime.datetime.strptime(f"{date_part} {time_part[:5]}", "%Y-%m-%d %H:%M")
-                                kickoff_display = dt.strftime("%a %H:%M")
-                            else:
-                                kickoff_display = str(f["kickoff_time"])
-                        except:
-                            kickoff_display = str(f["kickoff_time"])
-                        
                         home_logo = f.get("home_logo") or "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
                         away_logo = f.get("away_logo") or "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
                         
@@ -196,11 +187,11 @@ with tab_picks:
                                 </div>
                                 <span class='team-name'>{f['away_team']}</span>
                             </div>
-                            <div class='time-text'>🕒 {kickoff_display}</div>
+                            <div class='time-text'>🕒 {f['kickoff_time']}</div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
-                    st.write(f"ℹ️ No fixtures loaded for {league_title} in Gameweek {target_gw}.")
+                    st.write(f"ℹ️ No fixtures found for {league_title}.")
             
             render_flat_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
             render_flat_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
@@ -222,44 +213,59 @@ with tab_lobby:
         st.error(f"Could not load lobby data: {lobby_err}")
 
 with tab_admin:
-    st.subheader("TheSportsDB Sync Engine")
+    st.subheader("📡 Live Sky Sports Fixture Scraper")
+    st.info("This system skips APIs completely. It scrapes upcoming match schedules straight from Sky Sports.")
     
-    # Let the admin specify exactly what round number they want to forcefully download
-    sync_gw = st.number_input("Force Sync Gameweek Number", min_value=1, max_value=38, value=1)
+    scrape_gw = st.number_input("Target Gameweek Identifier", min_value=1, max_value=38, value=1)
     
-    if st.button("Run Round Fixture Sync"):
-        # Utilizing the completely open round schedule tracker endpoint
-        url = "https://www.thesportsdb.com/api/v1/json/1/eventsround.php"
-        leagues = [4328, 4338]
+    if st.button("Scrape & Sync Live Schedules"):
+        # URLs for Sky Sports fixtures
+        targets = [
+            {"league": "EPL", "url": "https://www.skysports.com/premier-league-fixtures"},
+            {"league": "SPFL", "url": "https://www.skysports.com/scottish-premiership-fixtures"}
+        ]
         
-        for league_id in leagues:
-            st.write(f"📡 Fetching Round {sync_gw} lines for League ID `{league_id}`...")
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        unique_id_counter = int(datetime.datetime.now().timestamp())
+        
+        for target in targets:
+            st.write(f"🕵️‍♂️ Scanning Sky Sports pages for **{target['league']}**...")
             try:
-                response = requests.get(url, params={"id": league_id, "r": sync_gw})
-                data = response.json()
-                items = data.get("events", [])
+                response = requests.get(target["url"], headers=headers)
+                soup = BeautifulSoup(response.text, 'html.parser')
                 
-                if not items:
-                    st.warning(f"No match events recorded on this round parameter for league reference {league_id}.")
-                    continue
-                    
                 fixtures_to_upsert = []
-                for item in items:
-                    fixtures_to_upsert.append({
-                        "id": int(item["idEvent"]),
-                        "league_id": league_id,
-                        "gameweek": sync_gw,
-                        "kickoff_time": f"{item['dateEvent']}T{item.get('strTime', '00:00:00')}",
-                        "home_team": item["strHomeTeam"],
-                        "away_team": item["strAwayTeam"],
-                        "home_logo": f"https://www.thesportsdb.com/images/media/team/badge/small/{item.get('idHomeTeam')}.png",
-                        "away_logo": f"https://www.thesportsdb.com/images/media/team/badge/small/{item.get('idAwayTeam')}.png",
-                        "status": "NS",
-                        "winner": "DRAW"
-                    })
+                # Sky Sports organizes matches inside groups by date
+                match_groups = soup.find_all('div', class_='fixres__item')
+                
+                for idx, item in enumerate(match_groups[:10]):  # Pull next 10 upcoming matches
+                    home_el = item.find('span', class_='matches__participant--home')
+                    away_el = item.find('span', class_='matches__participant--away')
+                    time_el = item.find('span', class_='matches__date')
+                    
+                    if home_el and away_el:
+                        home_name = home_el.find('span', class_='swap-text__target').text.strip()
+                        away_name = away_el.find('span', class_='swap-text__target').text.strip()
+                        match_time = time_el.text.strip() if time_el else "TBD"
+                        
+                        unique_id_counter += 1
+                        fixtures_to_upsert.append({
+                            "id": unique_id_counter,
+                            "league_id": target["league"],
+                            "gameweek": scrape_gw,
+                            "kickoff_time": match_time,
+                            "home_team": home_name,
+                            "away_team": away_name,
+                            "home_logo": f"https://img.icons8.com/ios-filled/50/38bdf8/football-ball.png",
+                            "away_logo": f"https://img.icons8.com/ios-filled/50/38bdf8/football-ball.png",
+                            "status": "NS",
+                            "winner": "DRAW"
+                        })
                 
                 if fixtures_to_upsert:
                     supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                    st.success(f"✅ Successfully inserted {len(fixtures_to_upsert)} matches into the database!")
+                    st.success(f"✅ Loaded {len(fixtures_to_upsert)} live matches into {target['league']} panel!")
+                else:
+                    st.warning(f"Could not parse any structured match elements for {target['league']}.")
             except Exception as e:
-                st.error(f"💥 Sync failed: {str(e)}")
+                st.error(f"💥 Failed scanning line rows: {str(e)}")
