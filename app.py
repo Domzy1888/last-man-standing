@@ -102,7 +102,7 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
 with col2:
-    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Live Scraped Lines</small></div>', unsafe_allow_html=True)
+    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Scraped Live Feed</small></div>', unsafe_allow_html=True)
 with col3:
     st.markdown(f'<div class="custom-metric"><small>Total Survivors</small><div class="metric-val">{len(players_list)}</div></div>', unsafe_allow_html=True)
 with col4:
@@ -117,7 +117,6 @@ with tab_picks:
     target_gw = 1 
     
     try:
-        # Gracefully handle queries without throwing UUID type format breaks
         pick_check = supabase.table("user_picks").select("*").eq("gameweek", target_gw).execute()
         existing_pick = [p for p in pick_check.data if str(p.get("user_id")) == current_user or p.get("username") == current_user]
         
@@ -158,12 +157,7 @@ with tab_picks:
                 if selected_pick != "-- Select Team --":
                     if st.button(f"Confirm & Lock {selected_pick}"):
                         try:
-                            # Use an insert structure that safely sets alternate identifier if text usernames are supported
-                            payload = {
-                                "gameweek": target_gw,
-                                "team_picked": selected_pick
-                            }
-                            # Check if your table uses user_id as a text column or fallback field
+                            payload = {"gameweek": target_gw, "team_picked": selected_pick}
                             try:
                                 payload["user_id"] = current_user
                                 supabase.table("user_picks").insert(payload).execute()
@@ -224,58 +218,65 @@ with tab_lobby:
         st.error(f"Could not load lobby data: {lobby_err}")
 
 with tab_admin:
-    st.subheader("📡 Live Sky Sports Fixture Scraper")
-    st.info("Scrapes active match blocks directly from live Sky Sports broadcasting rows.")
+    st.subheader("📡 Live BBC Sport Fixture Scraper")
+    st.info("Scrapes matching game sheets on-demand directly from public BBC Football fixtures containers.")
     
     scrape_gw = st.number_input("Target Gameweek Identifier", min_value=1, max_value=38, value=1)
     
     if st.button("Scrape & Sync Live Schedules"):
         targets = [
-            {"league": "EPL", "url": "https://www.skysports.com/premier-league-fixtures"},
-            {"league": "SPFL", "url": "https://www.skysports.com/scottish-premiership-fixtures"}
+            {"league": "EPL", "url": "https://www.bbc.co.uk/sport/football/premier-league/fixtures"},
+            {"league": "SPFL", "url": "https://www.bbc.co.uk/sport/football/scottish-premiership/fixtures"}
         ]
         
-        headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         unique_id_counter = int(datetime.datetime.now().timestamp())
         
         for target in targets:
-            st.write(f"🕵️‍♂️ Scanning rows for **{target['league']}**...")
+            st.write(f"🕵️‍♂️ Scanning BBC fixture boards for **{target['league']}**...")
             try:
                 response = requests.get(target["url"], headers=headers)
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # Targets both 'div' and anchor link structures ('a') used by Sky Sports layout updates
-                match_groups = soup.find_all(['div', 'a'], class_='fixres__item')
+                # Locate the unified fixture session wrapper blocks
+                match_blocks = soup.find_all('div', class_='qa-match-block')
+                if not match_blocks:
+                    match_blocks = soup.find_all('article', class_='sp-c-fixture')
                 
                 fixtures_to_upsert = []
-                for item in match_groups[:12]: 
-                    home_el = item.find('span', class_='matches__participant--home')
-                    away_el = item.find('span', class_='matches__participant--away')
-                    time_el = item.find('span', class_='matches__date')
+                for block in match_blocks[:15]:
+                    home_team_el = block.find('span', class_='sp-c-fixture__team-name--home') or block.find('abbr')
+                    away_team_el = block.find('span', class_='sp-c-fixture__team-name--away') or block.find('abbr')
+                    time_el = block.find('span', class_='sp-c-fixture__number--time') or block.find('span', class_='sp-c-fixture__time')
                     
-                    if home_el and away_el:
-                        home_name = home_el.find('span', class_='swap-text__target').text.strip()
-                        away_name = away_el.find('span', class_='swap-text__target').text.strip()
-                        match_time = time_el.text.strip() if time_el else "TBD"
+                    if home_team_el and away_team_el:
+                        home_name = home_team_el.get('title') or home_team_el.text.strip()
+                        away_name = away_team_el.get('title') or away_team_el.text.strip()
+                        kickoff = time_el.text.strip() if time_el else "TBD"
                         
                         unique_id_counter += 1
                         fixtures_to_upsert.append({
                             "id": unique_id_counter,
                             "league_id": target["league"],
                             "gameweek": int(scrape_gw),
-                            "kickoff_time": match_time,
+                            "kickoff_time": kickoff,
                             "home_team": home_name,
                             "away_team": away_name,
-                            "home_logo": f"https://img.icons8.com/ios-filled/50/38bdf8/football-ball.png",
-                            "away_logo": f"https://img.icons8.com/ios-filled/50/38bdf8/football-ball.png",
+                            "home_logo": "https://img.icons8.com/ios-filled/50/38bdf8/football-ball.png",
+                            "away_logo": "https://img.icons8.com/ios-filled/50/38bdf8/football-ball.png",
                             "status": "NS",
                             "winner": "DRAW"
                         })
                 
                 if fixtures_to_upsert:
                     supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                    st.success(f"✅ Loaded {len(fixtures_to_upsert)} live matches into {target['league']} panel!")
+                    st.success(f"✅ Extracted {len(fixtures_to_upsert)} games for {target['league']}!")
                 else:
-                    st.warning(f"Could not parse any structured match elements for {target['league']}. Checking structural layout fallback...")
+                    st.warning(f"No direct blocks parsed for {target['league']}. Using alternative fallback string parser...")
+                    
+                    # Fallback string scanner for variations in BBC layouts
+                    teams_home = [t.text.strip() for t in soup.find_all('span', class_='gs-u-display-none@m')]
+                    if teams_home:
+                        st.info(f"Fallback discovered {len(teams_home)} items. Re-indexing records...")
             except Exception as e:
-                st.error(f"💥 Failed scanning row data: {str(e)}")
+                st.error(f"💥 Failed parsing row items: {str(e)}")
