@@ -11,7 +11,6 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 st.set_page_config(page_title="Last Man Standing", page_icon="⚽", layout="wide")
 
-# CSS Overhaul for a Premium Sportsbook Sans-Serif Minimalist Presentation
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
@@ -39,24 +38,35 @@ html, body, [data-testid="stAppViewContainer"] {
     align-items: center;
     justify-content: center;
     text-align: center;
-    padding: 18px 0;
-    font-family: 'Inter', sans-serif;
+    padding: 20px 0;
 }
 
 .match-teams-line {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 10px;
     font-size: 1.3rem; 
-    font-weight: 700; 
+    font-weight: 800; 
     text-transform: uppercase;
     letter-spacing: 0.02em;
+    flex-wrap: wrap;
+}
+
+.team-name {
+    display: inline-block;
+}
+
+.center-vs-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 4px;
 }
 
 .team-badge {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     object-fit: contain;
 }
 
@@ -65,14 +75,13 @@ html, body, [data-testid="stAppViewContainer"] {
     color: #64748b;
     font-weight: 400;
     text-transform: lowercase;
-    margin: 0 4px;
 }
 
 .time-text { 
     color: #64748b; 
     font-size: 0.9rem; 
     font-weight: 500;
-    margin-top: 6px;
+    margin-top: 8px;
     text-transform: uppercase;
 }
 
@@ -163,7 +172,7 @@ with tab_picks:
             
             st.divider()
             
-            # --- UNIFIED FLUID LIST VIEW (NO DIVIDERS, CENTERED, BADGES INCLUDED) ---
+            # --- UNIFIED FLUID LIST VIEW ---
             def render_flat_fixtures(league_title, league_list):
                 if league_list:
                     st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
@@ -174,18 +183,20 @@ with tab_picks:
                         except:
                             kickoff_display = str(f["kickoff_time"])
                         
-                        # Fallback placeholders if sync engine hasn't populated badges yet
+                        # Hidden fallback if sync hasn't run yet
                         home_logo = f.get("home_logo") or "https://media.api-sports.io/football/teams/placeholder.png"
                         away_logo = f.get("away_logo") or "https://media.api-sports.io/football/teams/placeholder.png"
                         
                         st.markdown(f"""
                         <div class='match-row-container'>
                             <div class='match-teams-line'>
-                                <img src='{home_logo}' class='team-badge' />
-                                <span>{f['home_team']}</span>
-                                <span class='vs-divider'>vs</span>
-                                <span>{f['away_team']}</span>
-                                <img src='{away_logo}' class='team-badge' />
+                                <span class='team-name'>{f['home_team']}</span>
+                                <div class='center-vs-group'>
+                                    <img src='{home_logo}' class='team-badge' />
+                                    <span class='vs-divider'>vs</span>
+                                    <img src='{away_logo}' class='team-badge' />
+                                </div>
+                                <span class='team-name'>{f['away_team']}</span>
                             </div>
                             <div class='time-text'>🕒 {kickoff_display}</div>
                         </div>
