@@ -12,7 +12,7 @@ st.set_page_config(page_title="Last Man Standing", page_icon="⚽", layout="wide
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght=400;600;800&display=swap');
 
 html, body, [data-testid="stAppViewContainer"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -101,7 +101,7 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
 with col2:
-    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Aug 2026 Round</small></div>', unsafe_allow_html=True)
+    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Upcoming Fixtures</small></div>', unsafe_allow_html=True)
 with col3:
     st.markdown(f'<div class="custom-metric"><small>Total Survivors</small><div class="metric-val">{len(players_list)}</div></div>', unsafe_allow_html=True)
 with col4:
@@ -128,12 +128,13 @@ with tab_picks:
         if not all_fixtures:
             st.info("No fixtures found in database. Go to Admin Toolkit and run the sync engine.")
         else:
+            # Safely parse gameweek mappings
             fixtures = [
                 f for f in all_fixtures 
                 if f.get("gameweek") is not None and int(float(f["gameweek"])) == target_gw
             ]
             
-            # Match static league IDs from TheSportsDB
+            # Grouping by TheSportsDB Static League IDs
             epl_fixtures = [f for f in fixtures if f["league_id"] == 4328]
             spfl_fixtures = [f for f in fixtures if f["league_id"] == 4338]
             
@@ -174,7 +175,6 @@ with tab_picks:
                     st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
                     for f in league_list:
                         try:
-                            # Parse dates gracefully
                             if "T" in str(f["kickoff_time"]):
                                 date_part, time_part = str(f["kickoff_time"]).split("T")
                                 dt = datetime.datetime.strptime(f"{date_part} {time_part[:5]}", "%Y-%m-%d %H:%M")
@@ -202,7 +202,7 @@ with tab_picks:
                         </div>
                         """, unsafe_allow_html=True)
                 else:
-                    st.write(f"ℹ️ No active fixtures found for {league_title}.")
+                    st.write(f"ℹ️ No active fixtures mapped for {league_title} in Gameweek {target_gw}.")
             
             render_flat_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
             render_flat_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
@@ -225,29 +225,27 @@ with tab_lobby:
 
 with tab_admin:
     st.subheader("TheSportsDB Sync Engine")
-    
-    # Updated default to current active season string
-    target_season = st.text_input("Target Season String", value="2026-2027")
+    st.info("Pulls upcoming fixtures directly from the free community directory database.")
     
     if st.button("Run Free Fixture Refresher"):
-        url = "https://www.thesportsdb.com/api/v1/json/1/eventsseason.php"
+        url = "https://www.thesportsdb.com/api/v1/json/1/eventsnext.php"
         leagues = [4328, 4338]
         
         for league_id in leagues:
-            st.write(f"📡 Syncing League `{league_id}` from Free Source...")
+            st.write(f"📡 Pulling upcoming schedule lines for League `{league_id}`...")
             try:
-                response = requests.get(url, params={"id": league_id, "s": target_season})
+                response = requests.get(url, params={"id": league_id})
                 data = response.json()
                 items = data.get("events", [])
                 
                 if not items:
-                    st.warning(f"No events returned for league {league_id} in season {target_season}.")
+                    st.warning(f"No upcoming matches returned right now for league reference {league_id}.")
                     continue
                     
                 fixtures_to_upsert = []
                 for item in items:
-                    gw_val = item.get("intRound")
-                    if not gw_val: continue
+                    # Map upcoming round sequences down to Gameweek 1 display buckets
+                    gw_val = item.get("intRound") or 1
                     
                     fixtures_to_upsert.append({
                         "id": int(item["idEvent"]),
@@ -258,12 +256,12 @@ with tab_admin:
                         "away_team": item["strAwayTeam"],
                         "home_logo": f"https://www.thesportsdb.com/images/media/team/badge/small/{item.get('idHomeTeam')}.png",
                         "away_logo": f"https://www.thesportsdb.com/images/media/team/badge/small/{item.get('idAwayTeam')}.png",
-                        "status": "FT" if item.get("intHomeScore") is not None else "NS",
-                        "winner": item["strHomeTeam"] if int(item.get("intHomeScore", -1)) > int(item.get("intAwayScore", -1)) else (item["strAwayTeam"] if int(item.get("intAwayScore", -1)) > int(item.get("intHomeScore", -1)) else "DRAW")
+                        "status": "NS",
+                        "winner": "DRAW"
                     })
                 
                 if fixtures_to_upsert:
                     supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                    st.success(f"✅ Downloaded {len(fixtures_to_upsert)} matches into database for League {league_id}!")
+                    st.success(f"✅ Downloaded {len(fixtures_to_upsert)} upcoming games into Supabase table!")
             except Exception as e:
-                st.error(f"💥 Failed processing data row: {str(e)}")
+                st.error(f"💥 Processing error details: {str(e)}")
