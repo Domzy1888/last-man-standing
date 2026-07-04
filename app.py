@@ -9,29 +9,26 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 API_KEY = st.secrets["FOOTBALL_API_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Adjusting tab branding to standard clean Last Man Standing layout
 st.set_page_config(page_title="Last Man Standing", page_icon="⚽", layout="wide")
 
 st.markdown("""
 <style>
 .custom-metric { background: #1e293b; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #334155; }
 .metric-val { font-size: 1.8rem; font-weight: 800; color: #38bdf8; }
-.league-container { background: #0f172a; border: 1px solid #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
-.league-header { background: #1e293b; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-weight: bold; text-align: center; }
-.match-card { border: 1px solid #334155; padding: 12px; border-radius: 8px; margin-bottom: 10px; background-color: #1e293b; line-height: 1.6; }
+.league-header { font-size: 1.25rem; font-weight: bold; color: #38bdf8; margin: 25px 0 10px 0; border-bottom: 2px solid #334155; padding-bottom: 5px; }
+.match-row { padding: 10px 5px; border-bottom: 1px solid #1e293b; font-size: 1.05rem; }
+.time-text { color: #64748b; font-size: 0.85rem; }
 .locked-box { background: #065f46; color: #a7f3d0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; margin-bottom: 20px; border: 1px solid #047857; }
 </style>
 """, unsafe_allow_html=True)
 
-# Heading changed to simple Last Man Standing title
 st.title("⚽ Last Man Standing")
 st.caption("EPL & William Hill Premiership Survival League")
 
-# --- Temporary Player Profile Setup (Replaced by login system in Phase 2) ---
+# --- Temporary Player Profile Setup ---
 players_list = ["Callum", "Jamie", "Ross", "Stuart", "Chris"]
 current_user = st.sidebar.selectbox("👤 Select Your Player Profile", players_list)
 
-# Dynamic Prize Calculation (£10 entrance per player)
 entrance_fee = 10
 total_prizepot = len(players_list) * entrance_fee
 
@@ -40,17 +37,14 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
 with col2:
-    # Included explicit placeholder dates for the current active round bracket
     st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Aug 16 - Aug 18</small></div>', unsafe_allow_html=True)
 with col3:
     st.markdown(f'<div class="custom-metric"><small>Total Survivors</small><div class="metric-val">{len(players_list)}</div></div>', unsafe_allow_html=True)
 with col4:
-    # Live Prize Pot Display Panel
     st.markdown(f'<div class="custom-metric"><small>Total Prize Pot</small><div class="metric-val">£{total_prizepot}</div></div>', unsafe_allow_html=True)
 
 st.divider()
 
-# Renamed tabs according to your instructions
 tab_picks, tab_lobby, tab_admin = st.tabs(["🎯 Make Your Pick", "📊 User Selections", "⚙️ Admin Toolkit"])
 
 with tab_picks:
@@ -111,56 +105,35 @@ with tab_picks:
             
             st.divider()
             
-            # --- CONDENSED LEAGUE CONTAINERS SIDE-BY-SIDE ---
-            left_col, right_col = st.columns(2)
+            # --- UNIFIED FLUID LIST VIEW ---
+            def render_flat_fixtures(league_title, league_list):
+                if league_list:
+                    st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
+                    for f in league_list:
+                        try:
+                            kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
+                            kickoff_display = kickoff.strftime("%a %H:%M")
+                        except:
+                            kickoff_display = str(f["kickoff_time"])
+                        
+                        # Clean side-by-side row display layout matching your custom images
+                        st.markdown(f"""
+                        <div class='match-row'>
+                            <strong>{f['home_team']}</strong> vs <strong>{f['away_team']}</strong>
+                            <br/><span class='time-text'>🕒 {kickoff_display}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.write(f"ℹ️ No active fixtures found for {league_title}.")
             
-            with left_col:
-                st.markdown("<div class='league-container'>", unsafe_allow_html=True)
-                st.markdown("<div class='league-header'>🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League</div>", unsafe_allow_html=True)
-                if epl_fixtures:
-                    for f in epl_fixtures:
-                        try:
-                            kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
-                            kickoff_display = kickoff.strftime("%a %H:%M")
-                        except:
-                            kickoff_display = str(f["kickoff_time"])
-                        
-                        st.markdown(f"""
-                        <div class='match-card'>
-                            <strong>{f['home_team']}</strong> vs <strong>{f['away_team']}</strong><br/>
-                            <small style='color: #94a3b8;'>📅 Kickoff: {kickoff_display}</small>
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.write("ℹ️ No active English fixtures found for this round.")
-                st.markdown("</div>", unsafe_allow_html=True)
-                
-            with right_col:
-                st.markdown("<div class='league-container'>", unsafe_allow_html=True)
-                st.markdown("<div class='league-header'>🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership</div>", unsafe_allow_html=True)
-                if spfl_fixtures:
-                    for f in spfl_fixtures:
-                        try:
-                            kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
-                            kickoff_display = kickoff.strftime("%a %H:%M")
-                        except:
-                            kickoff_display = str(f["kickoff_time"])
-                        
-                        st.markdown(f"""
-                        <div class='match-card'>
-                            <strong>{f['home_team']}</strong> vs <strong>{f['away_team']}</strong><br/>
-                            <small style='color: #94a3b8;'>📅 Kickoff: {kickoff_display}</small>
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.write("ℹ️ No active Scottish fixtures found for this round.")
-                st.markdown("</div>", unsafe_allow_html=True)
+            # Flow straight down the page in one single list
+            render_flat_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
+            render_flat_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
             
     except Exception as e:
         st.error(f"Error drawing layout: {e}")
 
 with tab_lobby:
-    # Heading renamed cleanly to User Selections
     st.subheader("LMS User Selections Feed")
     try:
         lobby_res = supabase.table("user_picks").select("*").eq("gameweek", 1).execute()
