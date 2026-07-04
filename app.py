@@ -11,13 +11,71 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 st.set_page_config(page_title="Last Man Standing", page_icon="⚽", layout="wide")
 
+# CSS Overhaul for a Premium Sportsbook Sans-Serif Minimalist Presentation
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+
+html, body, [data-testid="stAppViewContainer"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
 .custom-metric { background: #1e293b; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #334155; }
 .metric-val { font-size: 1.8rem; font-weight: 800; color: #38bdf8; }
-.league-header { font-size: 1.25rem; font-weight: bold; color: #38bdf8; margin: 25px 0 10px 0; border-bottom: 2px solid #334155; padding-bottom: 5px; }
-.match-row { padding: 10px 5px; border-bottom: 1px solid #1e293b; font-size: 1.05rem; }
-.time-text { color: #64748b; font-size: 0.85rem; }
+
+.league-header { 
+    font-size: 1.1rem; 
+    font-weight: 800; 
+    color: #94a3b8; 
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 35px 0 15px 0; 
+    text-align: center;
+}
+
+.match-row-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 18px 0;
+    font-family: 'Inter', sans-serif;
+}
+
+.match-teams-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 1.3rem; 
+    font-weight: 700; 
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.team-badge {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+}
+
+.vs-divider {
+    font-size: 0.95rem;
+    color: #64748b;
+    font-weight: 400;
+    text-transform: lowercase;
+    margin: 0 4px;
+}
+
+.time-text { 
+    color: #64748b; 
+    font-size: 0.9rem; 
+    font-weight: 500;
+    margin-top: 6px;
+    text-transform: uppercase;
+}
+
 .locked-box { background: #065f46; color: #a7f3d0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; margin-bottom: 20px; border: 1px solid #047857; }
 </style>
 """, unsafe_allow_html=True)
@@ -105,7 +163,7 @@ with tab_picks:
             
             st.divider()
             
-            # --- UNIFIED FLUID LIST VIEW ---
+            # --- UNIFIED FLUID LIST VIEW (NO DIVIDERS, CENTERED, BADGES INCLUDED) ---
             def render_flat_fixtures(league_title, league_list):
                 if league_list:
                     st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
@@ -116,17 +174,25 @@ with tab_picks:
                         except:
                             kickoff_display = str(f["kickoff_time"])
                         
-                        # Clean side-by-side row display layout matching your custom images
+                        # Fallback placeholders if sync engine hasn't populated badges yet
+                        home_logo = f.get("home_logo") or "https://media.api-sports.io/football/teams/placeholder.png"
+                        away_logo = f.get("away_logo") or "https://media.api-sports.io/football/teams/placeholder.png"
+                        
                         st.markdown(f"""
-                        <div class='match-row'>
-                            <strong>{f['home_team']}</strong> vs <strong>{f['away_team']}</strong>
-                            <br/><span class='time-text'>🕒 {kickoff_display}</span>
+                        <div class='match-row-container'>
+                            <div class='match-teams-line'>
+                                <img src='{home_logo}' class='team-badge' />
+                                <span>{f['home_team']}</span>
+                                <span class='vs-divider'>vs</span>
+                                <span>{f['away_team']}</span>
+                                <img src='{away_logo}' class='team-badge' />
+                            </div>
+                            <div class='time-text'>🕒 {kickoff_display}</div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
                     st.write(f"ℹ️ No active fixtures found for {league_title}.")
             
-            # Flow straight down the page in one single list
             render_flat_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
             render_flat_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
             
@@ -175,11 +241,13 @@ with tab_admin:
                         "kickoff_time": item["fixture"]["date"],
                         "home_team": item["teams"]["home"]["name"],
                         "away_team": item["teams"]["away"]["name"],
+                        "home_logo": item["teams"]["home"].get("logo"),
+                        "away_logo": item["teams"]["away"].get("logo"),
                         "status": item["fixture"]["status"]["short"],
                         "winner": item["teams"]["home"]["name"] if item["teams"]["home"].get("winner") is True else (item["teams"]["away"]["name"] if item["teams"]["away"].get("winner") is True else ("DRAW" if item["fixture"]["status"]["short"] == "FT" else None))
                     })
                 if fixtures_to_upsert:
                     supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                    st.success(f"✅ Synchronized League {league_id}!")
+                    st.success(f"✅ Synchronized League {league_id} with Team Badges!")
             except Exception as e:
                 st.error(f"💥 Error: {str(e)}")
