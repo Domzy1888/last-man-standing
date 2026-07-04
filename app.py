@@ -1,10 +1,8 @@
 import streamlit as st
 import datetime
-import requests
-from bs4 import BeautifulSoup
 from supabase import create_client
 
-# Initialize Supabase Client Connection
+# Initialize Supabase Client Connection for recording survival selections
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -53,41 +51,79 @@ html, body, [data-testid="stAppViewContainer"] {
     flex-wrap: wrap;
 }
 
-.team-name {
-    display: inline-block;
-}
-
-.center-vs-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 0 4px;
-}
-
-.team-badge {
-    width: 32px;
-    height: 32px;
-    object-fit: contain;
-}
-
-.vs-divider {
-    font-size: 0.95rem;
-    color: #64748b;
-    font-weight: 400;
-    text-transform: lowercase;
-}
-
-.time-text { 
-    color: #64748b; 
-    font-size: 0.9rem; 
-    font-weight: 500;
-    margin-top: 8px;
-    text-transform: uppercase;
-}
-
+.team-name { display: inline-block; }
+.center-vs-group { display: flex; align-items: center; gap: 10px; margin: 0 4px; }
+.team-badge { width: 32px; height: 32px; object-fit: contain; }
+.vs-divider { font-size: 0.95rem; color: #64748b; font-weight: 400; text-transform: lowercase; }
+.time-text { color: #64748b; font-size: 0.9rem; font-weight: 500; margin-top: 8px; text-transform: uppercase; }
 .locked-box { background: #065f46; color: #a7f3d0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; margin-bottom: 20px; border: 1px solid #047857; }
 </style>
 """, unsafe_allow_html=True)
+
+# ----------------------------------------------------
+# 🏟️ MASTER FIXTURE DATA DICTIONARY (2026/27 SEASON)
+# ----------------------------------------------------
+FIXTURE_DATABASE = {
+    1: {
+        "start_date": datetime.date(2026, 7, 29),  # Wednesday
+        "end_date": datetime.date(2026, 8, 25),    # Extended to include opening rounds
+        "EPL": [
+            {"home": "Arsenal", "away": "Coventry City", "time": "Fri 21 Aug - 20:00"},
+            {"home": "Hull City", "away": "Manchester United", "time": "Sat 22 Aug - 12:30"},
+            {"home": "Everton", "away": "Crystal Palace", "time": "Sat 22 Aug - 15:00"},
+            {"home": "Ipswich Town", "away": "Sunderland", "time": "Sat 22 Aug - 15:00"},
+            {"home": "Nottingham Forest", "away": "Leeds United", "time": "Sat 22 Aug - 15:00"},
+            {"home": "Brentford", "away": "Tottenham Hotspur", "time": "Sat 22 Aug - 17:30"},
+            {"home": "Brighton & Hove Albion", "away": "Aston Villa", "time": "Sun 23 Aug - 14:00"},
+            {"home": "Manchester City", "away": "AFC Bournemouth", "time": "Sun 23 Aug - 14:00"},
+            {"home": "Newcastle United", "away": "Liverpool", "time": "Sun 23 Aug - 16:30"},
+            {"home": "Fulham", "away": "Chelsea", "time": "Mon 24 Aug - 20:00"}
+        ],
+        "SPFL": [
+            {"home": "Dundee United", "away": "Rangers", "time": "Fri 31 Jul - 20:00"},
+            {"home": "Falkirk", "away": "St Mirren", "time": "Sat 1 Aug - 15:00"},
+            {"home": "Aberdeen", "away": "Heart of Midlothian", "time": "Sat 1 Aug - 17:30"},
+            {"home": "St Johnstone", "away": "Kilmarnock", "time": "Sun 2 Aug - 14:00"},
+            {"home": "Hibernian", "away": "Motherwell", "time": "Sun 2 Aug - 16:30"},
+            {"home": "Celtic", "away": "Dundee", "time": "Mon 3 Aug - 19:30"}
+        ]
+    },
+    2: {
+        "start_date": datetime.date(2026, 8, 26), # Wednesday
+        "end_date": datetime.date(2026, 9, 1),    # Tuesday
+        "EPL": [
+            {"home": "AFC Bournemouth", "away": "Everton", "time": "Sat 29 Aug - 15:00"},
+            {"home": "Aston Villa", "away": "Arsenal", "time": "Sat 29 Aug - 15:00"},
+            {"home": "Chelsea", "away": "Brighton & Hove Albion", "time": "Sat 29 Aug - 15:00"},
+            {"home": "Coventry City", "away": "Hull City", "time": "Sat 29 Aug - 15:00"},
+            {"home": "Crystal Palace", "away": "Manchester City", "time": "Sat 29 Aug - 15:00"},
+            {"home": "Leeds United", "away": "Brentford", "time": "Sat 29 Aug - 15:00"},
+            {"home": "Liverpool", "away": "Nottingham Forest", "time": "Sat 29 Aug - 15:00"},
+            {"home": "Manchester United", "away": "Ipswich Town", "time": "Sat 29 Aug - 15:00"},
+            {"home": "Sunderland", "away": "Fulham", "time": "Sat 29 Aug - 15:00"},
+            {"home": "Tottenham Hotspur", "away": "Newcastle United", "time": "Sat 29 Aug - 15:00"}
+        ],
+        "SPFL": [
+            {"home": "Dundee", "away": "Aberdeen", "time": "Sat 8 Aug - 15:00"},
+            {"home": "Heart of Midlothian", "away": "Dundee United", "time": "Sat 8 Aug - 15:00"},
+            {"home": "Motherwell", "away": "Falkirk", "time": "Sat 8 Aug - 15:00"},
+            {"home": "St Mirren", "away": "St Johnstone", "time": "Sat 8 Aug - 15:00"},
+            {"home": "Kilmarnock", "away": "Celtic", "time": "Sun 9 Aug - 13:30"},
+            {"home": "Rangers", "away": "Hibernian", "time": "Sun 9 Aug - 16:00"}
+        ]
+    }
+}
+
+# ----------------------------------------------------
+# 📅 AUTOMATIC GAMEWEEK DETECTION CALCULATION
+# ----------------------------------------------------
+today = datetime.date.today()
+current_calculated_gw = 1 # Fallback default
+
+for gw, bounds in FIXTURE_DATABASE.items():
+    if bounds["start_date"] <= today <= bounds["end_date"]:
+        current_calculated_gw = gw
+        break
 
 st.title("⚽ Last Man Standing")
 st.caption("EPL & William Hill Premiership Survival League")
@@ -102,7 +138,7 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
 with col2:
-    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Scraped Live Feed</small></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="custom-metric"><small>Current Calendar Round</small><div class="metric-val">Gameweek {current_calculated_gw}</div><small style="color:#38bdf8;">Hardcoded Roster</small></div>', unsafe_allow_html=True)
 with col3:
     st.markdown(f'<div class="custom-metric"><small>Total Survivors</small><div class="metric-val">{len(players_list)}</div></div>', unsafe_allow_html=True)
 with col4:
@@ -110,173 +146,92 @@ with col4:
 
 st.divider()
 
-tab_picks, tab_lobby, tab_admin = st.tabs(["🎯 Make Your Pick", "📊 User Selections", "⚙️ Admin Toolkit"])
+# Main player viewing environment
+gw_to_show = st.selectbox("📅 View Roster Sheet For:", list(FIXTURE_DATABASE.keys()), index=current_calculated_gw-1)
+selected_gw_data = FIXTURE_DATABASE[gw_to_show]
+
+tab_picks, tab_lobby = st.tabs(["🎯 Make Your Pick", "📊 User Selections"])
 
 with tab_picks:
-    st.subheader("Available Matches")
-    target_gw = 1 
-    
     try:
-        pick_check = supabase.table("user_picks").select("*").eq("gameweek", target_gw).execute()
-        existing_pick = [p for p in pick_check.data if str(p.get("user_id")) == current_user or p.get("username") == current_user]
+        # DB syntax error handling using a safe user identifier format
+        pick_check = supabase.table("user_picks").select("*").eq("gameweek", gw_to_show).execute()
+        existing_pick = [p for p in pick_check.data if p.get("username") == current_user or str(p.get("user_id")) == current_user]
         
         past_picks_res = supabase.table("user_picks").select("*").execute()
         burned_teams = [p["team_picked"] for p in past_picks_res.data if p.get("username") == current_user or str(p.get("user_id")) == current_user]
         
-        res = supabase.table("fixtures").select("*").order("kickoff_time").execute()
-        all_fixtures = res.data
+        # Build available list from the dictionary structure instead of an external web request
+        all_teams_in_gw = []
+        for match in selected_gw_data["EPL"] + selected_gw_data["SPFL"]:
+            all_teams_in_gw.extend([match["home"], match["away"]])
+        available_teams = sorted(list(set(all_teams_in_gw)))
         
-        if not all_fixtures:
-            st.info("No fixtures found in database. Go to Admin Toolkit and scrape fresh fixtures.")
+        st.markdown("### 🔒 Lock In Your Team")
+        
+        if existing_pick:
+            locked_team = existing_pick[0]["team_picked"]
+            st.markdown(f"""
+            <div class="locked-box">
+                🔒 You have officially locked in {locked_team} for Gameweek {gw_to_show}!
+            </div>
+            """, unsafe_allow_html=True)
         else:
-            fixtures = [
-                f for f in all_fixtures 
-                if f.get("gameweek") is not None and int(float(f["gameweek"])) == target_gw
-            ]
+            selectable_options = ["-- Select Team --"] + [team for team in available_teams if team not in burned_teams]
+            selected_pick = st.selectbox(f"Choose your survival squad for Gameweek {gw_to_show}:", selectable_options)
             
-            epl_fixtures = [f for f in fixtures if str(f["league_id"]).upper() == "EPL"]
-            spfl_fixtures = [f for f in fixtures if str(f["league_id"]).upper() == "SPFL"]
-            
-            available_teams = sorted(list(set(
-                [f["home_team"] for f in fixtures] + [f["away_team"] for f in fixtures]
-            )))
-            
-            st.markdown("### 🔒 Lock In Your Team")
-            
-            if existing_pick:
-                locked_team = existing_pick[0]["team_picked"]
+            if selected_pick != "-- Select Team --":
+                if st.button(f"Confirm & Lock {selected_pick}"):
+                    payload = {"gameweek": gw_to_show, "team_picked": selected_pick}
+                    try:
+                        payload["user_id"] = current_user
+                        supabase.table("user_picks").insert(payload).execute()
+                    except:
+                        payload.pop("user_id", None)
+                        payload["username"] = current_user
+                        supabase.table("user_picks").insert(payload).execute()
+                        
+                    st.success(f"Success! {selected_pick} is securely saved.")
+                    st.rerun()
+        
+        st.divider()
+        
+        # Render lists elegantly out of the explicit dictionary payload
+        def draw_league_fixtures(title, matches_list):
+            st.markdown(f"<div class='league-header'>{title}</div>", unsafe_allow_html=True)
+            for m in matches_list:
+                logo = "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
                 st.markdown(f"""
-                <div class="locked-box">
-                    🔒 You have officially locked in {locked_team} for Gameweek {target_gw}!
+                <div class='match-row-container'>
+                    <div class='match-teams-line'>
+                        <span class='team-name'>{m['home']}</span>
+                        <div class='center-vs-group'>
+                            <img src='{logo}' class='team-badge' />
+                            <span class='vs-divider'>vs</span>
+                            <img src='{logo}' class='team-badge' />
+                        </div>
+                        <span class='team-name'>{m['away']}</span>
+                    </div>
+                    <div class='time-text'>🕒 {m['time']}</div>
                 </div>
                 """, unsafe_allow_html=True)
-            else:
-                selectable_options = ["-- Select Team --"] + [team for team in available_teams if team not in burned_teams]
-                selected_pick = st.selectbox(f"Choose your single survival squad for Gameweek {target_gw}:", selectable_options)
-                
-                if selected_pick != "-- Select Team --":
-                    if st.button(f"Confirm & Lock {selected_pick}"):
-                        try:
-                            payload = {"gameweek": target_gw, "team_picked": selected_pick}
-                            try:
-                                payload["user_id"] = current_user
-                                supabase.table("user_picks").insert(payload).execute()
-                            except:
-                                payload.pop("user_id", None)
-                                payload["username"] = current_user
-                                supabase.table("user_picks").insert(payload).execute()
-                                
-                            st.success(f"Success! {selected_pick} is saved.")
-                            st.rerun()
-                        except Exception as save_err:
-                            st.error(f"Failed to submit entry: {save_err}")
-            
-            st.divider()
-            
-            def render_flat_fixtures(league_title, league_list):
-                if league_list:
-                    st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
-                    for f in league_list:
-                        home_logo = f.get("home_logo") or "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
-                        away_logo = f.get("away_logo") or "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
-                        
-                        st.markdown(f"""
-                        <div class='match-row-container'>
-                            <div class='match-teams-line'>
-                                <span class='team-name'>{f['home_team']}</span>
-                                <div class='center-vs-group'>
-                                    <img src='{home_logo}' class='team-badge' />
-                                    <span class='vs-divider'>vs</span>
-                                    <img src='{away_logo}' class='team-badge' />
-                                </div>
-                                <span class='team-name'>{f['away_team']}</span>
-                            </div>
-                            <div class='time-text'>🕒 {f['kickoff_time']}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.write(f"ℹ️ No fixtures found for {league_title}.")
-            
-            render_flat_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
-            render_flat_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
+
+        draw_league_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", selected_gw_data["EPL"])
+        draw_league_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", selected_gw_data["SPFL"])
             
     except Exception as e:
         st.error(f"Error drawing layout: {e}")
 
 with tab_lobby:
-    st.subheader("LMS User Selections Feed")
+    st.subheader(f"LMS Selection Feed (Gameweek {gw_to_show})")
     try:
-        lobby_res = supabase.table("user_picks").select("*").eq("gameweek", 1).execute()
+        lobby_res = supabase.table("user_picks").select("*").eq("gameweek", gw_to_show).execute()
         all_picks = lobby_res.data
         if not all_picks:
-            st.info("Nobody has locked in a team for Gameweek 1 yet.")
+            st.info(f"Nobody has locked in a team for Gameweek {gw_to_show} yet.")
         else:
             for p in all_picks:
                 user_display = p.get('username') or p.get('user_id')
                 st.markdown(f"👤 **{user_display}** has locked in **{p['team_picked']}**")
     except Exception as lobby_err:
         st.error(f"Could not load lobby data: {lobby_err}")
-
-with tab_admin:
-    st.subheader("📡 Live BBC Sport Fixture Scraper")
-    st.info("Scrapes matching game sheets on-demand directly from public BBC Football fixtures containers.")
-    
-    scrape_gw = st.number_input("Target Gameweek Identifier", min_value=1, max_value=38, value=1)
-    
-    if st.button("Scrape & Sync Live Schedules"):
-        targets = [
-            {"league": "EPL", "url": "https://www.bbc.co.uk/sport/football/premier-league/fixtures"},
-            {"league": "SPFL", "url": "https://www.bbc.co.uk/sport/football/scottish-premiership/fixtures"}
-        ]
-        
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        unique_id_counter = int(datetime.datetime.now().timestamp())
-        
-        for target in targets:
-            st.write(f"🕵️‍♂️ Scanning BBC fixture boards for **{target['league']}**...")
-            try:
-                response = requests.get(target["url"], headers=headers)
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                # Locate the unified fixture session wrapper blocks
-                match_blocks = soup.find_all('div', class_='qa-match-block')
-                if not match_blocks:
-                    match_blocks = soup.find_all('article', class_='sp-c-fixture')
-                
-                fixtures_to_upsert = []
-                for block in match_blocks[:15]:
-                    home_team_el = block.find('span', class_='sp-c-fixture__team-name--home') or block.find('abbr')
-                    away_team_el = block.find('span', class_='sp-c-fixture__team-name--away') or block.find('abbr')
-                    time_el = block.find('span', class_='sp-c-fixture__number--time') or block.find('span', class_='sp-c-fixture__time')
-                    
-                    if home_team_el and away_team_el:
-                        home_name = home_team_el.get('title') or home_team_el.text.strip()
-                        away_name = away_team_el.get('title') or away_team_el.text.strip()
-                        kickoff = time_el.text.strip() if time_el else "TBD"
-                        
-                        unique_id_counter += 1
-                        fixtures_to_upsert.append({
-                            "id": unique_id_counter,
-                            "league_id": target["league"],
-                            "gameweek": int(scrape_gw),
-                            "kickoff_time": kickoff,
-                            "home_team": home_name,
-                            "away_team": away_name,
-                            "home_logo": "https://img.icons8.com/ios-filled/50/38bdf8/football-ball.png",
-                            "away_logo": "https://img.icons8.com/ios-filled/50/38bdf8/football-ball.png",
-                            "status": "NS",
-                            "winner": "DRAW"
-                        })
-                
-                if fixtures_to_upsert:
-                    supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                    st.success(f"✅ Extracted {len(fixtures_to_upsert)} games for {target['league']}!")
-                else:
-                    st.warning(f"No direct blocks parsed for {target['league']}. Using alternative fallback string parser...")
-                    
-                    # Fallback string scanner for variations in BBC layouts
-                    teams_home = [t.text.strip() for t in soup.find_all('span', class_='gs-u-display-none@m')]
-                    if teams_home:
-                        st.info(f"Fallback discovered {len(teams_home)} items. Re-indexing records...")
-            except Exception as e:
-                st.error(f"💥 Failed parsing row items: {str(e)}")
