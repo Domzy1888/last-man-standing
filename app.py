@@ -9,58 +9,67 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 API_KEY = st.secrets["FOOTBALL_API_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-st.set_page_config(page_title="SQUAD LOCK // LMS", page_icon="⚽", layout="wide")
+# Adjusting tab branding to standard clean Last Man Standing layout
+st.set_page_config(page_title="Last Man Standing", page_icon="⚽", layout="wide")
 
 st.markdown("""
 <style>
 .custom-metric { background: #1e293b; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #334155; }
 .metric-val { font-size: 1.8rem; font-weight: 800; color: #38bdf8; }
-.league-header { background: #1e293b; padding: 10px; border-radius: 6px; margin: 15px 0 10px 0; font-weight: bold; }
-.match-card { border: 1px solid #334155; padding: 12px; border-radius: 8px; margin-bottom: 10px; background-color: #0f172a; line-height: 1.6; }
+.league-container { background: #0f172a; border: 1px solid #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+.league-header { background: #1e293b; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-weight: bold; text-align: center; }
+.match-card { border: 1px solid #334155; padding: 12px; border-radius: 8px; margin-bottom: 10px; background-color: #1e293b; line-height: 1.6; }
 .locked-box { background: #065f46; color: #a7f3d0; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; margin-bottom: 20px; border: 1px solid #047857; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("⚽ SQUAD LOCK")
-st.caption("EPL & William Hill Premiership Last Man Standing")
+# Heading changed to simple Last Man Standing title
+st.title("⚽ Last Man Standing")
+st.caption("EPL & William Hill Premiership Survival League")
 
-# --- Player Profile Setup ---
+# --- Temporary Player Profile Setup (Replaced by login system in Phase 2) ---
 players_list = ["Callum", "Jamie", "Ross", "Stuart", "Chris"]
 current_user = st.sidebar.selectbox("👤 Select Your Player Profile", players_list)
 
-col1, col2, col3 = st.columns(3)
+# Dynamic Prize Calculation (£10 entrance per player)
+entrance_fee = 10
+total_prizepot = len(players_list) * entrance_fee
+
+# --- Scoreboard Analytics Dashboard ---
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
 with col2:
-    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div></div>', unsafe_allow_html=True)
+    # Included explicit placeholder dates for the current active round bracket
+    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Aug 16 - Aug 18</small></div>', unsafe_allow_html=True)
 with col3:
     st.markdown(f'<div class="custom-metric"><small>Total Survivors</small><div class="metric-val">{len(players_list)}</div></div>', unsafe_allow_html=True)
+with col4:
+    # Live Prize Pot Display Panel
+    st.markdown(f'<div class="custom-metric"><small>Total Prize Pot</small><div class="metric-val">£{total_prizepot}</div></div>', unsafe_allow_html=True)
 
 st.divider()
 
-tab_picks, tab_lobby, tab_admin = st.tabs(["🎯 Make Your Pick", "📊 Live Lobby", "⚙️ Admin Toolkit"])
+# Renamed tabs according to your instructions
+tab_picks, tab_lobby, tab_admin = st.tabs(["🎯 Make Your Pick", "📊 User Selections", "⚙️ Admin Toolkit"])
 
 with tab_picks:
     st.subheader("Available Matches")
     target_gw = 1 
     
     try:
-        # 1. Check if this specific player has already saved a pick for this gameweek
         pick_check = supabase.table("user_picks").select("*").eq("user_id", current_user).eq("gameweek", target_gw).execute()
         existing_pick = pick_check.data
         
-        # 2. Query all past selections to "burn" previously chosen squads
         past_picks_res = supabase.table("user_picks").select("team_picked").eq("user_id", current_user).execute()
         burned_teams = [p["team_picked"] for p in past_picks_res.data] if past_picks_res.data else []
         
-        # 3. Fetch all fixtures from database
         res = supabase.table("fixtures").select("*").order("kickoff_time").execute()
         all_fixtures = res.data
         
         if not all_fixtures:
             st.info("No fixtures found in database. Go to Admin Toolkit and run the sync engine.")
         else:
-            # Filter matches for the targeted gameweek round safely 
             fixtures = [
                 f for f in all_fixtures 
                 if f.get("gameweek") is not None and int(float(f["gameweek"])) == target_gw
@@ -69,7 +78,6 @@ with tab_picks:
             epl_fixtures = [f for f in fixtures if f["league_id"] == 39]
             spfl_fixtures = [f for f in fixtures if f["league_id"] == 179]
             
-            # Generate a master list of all teams playing this weekend
             available_teams = sorted(list(set(
                 [f["home_team"] for f in fixtures] + [f["away_team"] for f in fixtures]
             )))
@@ -85,13 +93,8 @@ with tab_picks:
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                # Filter out any previously burned squads
                 selectable_options = ["-- Select Team --"] + [team for team in available_teams if team not in burned_teams]
-                
-                selected_pick = st.selectbox(
-                    f"Choose your single survival squad for Gameweek {target_gw}:",
-                    selectable_options
-                )
+                selected_pick = st.selectbox(f"Choose your single survival squad for Gameweek {target_gw}:", selectable_options)
                 
                 if selected_pick != "-- Select Team --":
                     if st.button(f"Confirm & Lock {selected_pick}"):
@@ -108,11 +111,14 @@ with tab_picks:
             
             st.divider()
             
-            # --- FIXTURE DISPLAY CARDS ---
-            def render_league_fixtures(league_title, league_list):
-                if league_list:
-                    st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
-                    for f in league_list:
+            # --- CONDENSED LEAGUE CONTAINERS SIDE-BY-SIDE ---
+            left_col, right_col = st.columns(2)
+            
+            with left_col:
+                st.markdown("<div class='league-container'>", unsafe_allow_html=True)
+                st.markdown("<div class='league-header'>🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League</div>", unsafe_allow_html=True)
+                if epl_fixtures:
+                    for f in epl_fixtures:
                         try:
                             kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
                             kickoff_display = kickoff.strftime("%a %H:%M")
@@ -126,16 +132,36 @@ with tab_picks:
                         </div>
                         """, unsafe_allow_html=True)
                 else:
-                    st.write(f"ℹ️ No active fixtures found for {league_title} this round.")
-            
-            render_league_fixtures("🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League", epl_fixtures)
-            render_league_fixtures("🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership", spfl_fixtures)
+                    st.write("ℹ️ No active English fixtures found for this round.")
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+            with right_col:
+                st.markdown("<div class='league-container'>", unsafe_allow_html=True)
+                st.markdown("<div class='league-header'>🏴󠁧󠁢󠁳󠁣󠁴󠁿 William Hill Scottish Premiership</div>", unsafe_allow_html=True)
+                if spfl_fixtures:
+                    for f in spfl_fixtures:
+                        try:
+                            kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
+                            kickoff_display = kickoff.strftime("%a %H:%M")
+                        except:
+                            kickoff_display = str(f["kickoff_time"])
+                        
+                        st.markdown(f"""
+                        <div class='match-card'>
+                            <strong>{f['home_team']}</strong> vs <strong>{f['away_team']}</strong><br/>
+                            <small style='color: #94a3b8;'>📅 Kickoff: {kickoff_display}</small>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.write("ℹ️ No active Scottish fixtures found for this round.")
+                st.markdown("</div>", unsafe_allow_html=True)
             
     except Exception as e:
         st.error(f"Error drawing layout: {e}")
 
 with tab_lobby:
-    st.subheader("The Weekend Sweat Feed")
+    # Heading renamed cleanly to User Selections
+    st.subheader("LMS User Selections Feed")
     try:
         lobby_res = supabase.table("user_picks").select("*").eq("gameweek", 1).execute()
         all_picks = lobby_res.data
