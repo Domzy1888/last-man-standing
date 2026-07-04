@@ -12,7 +12,7 @@ st.set_page_config(page_title="Last Man Standing", page_icon="⚽", layout="wide
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght=400;600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
 html, body, [data-testid="stAppViewContainer"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -101,7 +101,7 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown('<div class="custom-metric"><small>Your Status</small><div class="metric-val">ALIVE</div></div>', unsafe_allow_html=True)
 with col2:
-    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Aug 16 - Aug 18</small></div>', unsafe_allow_html=True)
+    st.markdown('<div class="custom-metric"><small>Current Round</small><div class="metric-val">Gameweek 1</div><small style="color:#94a3b8;">Aug 2026 Round</small></div>', unsafe_allow_html=True)
 with col3:
     st.markdown(f'<div class="custom-metric"><small>Total Survivors</small><div class="metric-val">{len(players_list)}</div></div>', unsafe_allow_html=True)
 with col4:
@@ -133,6 +133,7 @@ with tab_picks:
                 if f.get("gameweek") is not None and int(float(f["gameweek"])) == target_gw
             ]
             
+            # Match static league IDs from TheSportsDB
             epl_fixtures = [f for f in fixtures if f["league_id"] == 4328]
             spfl_fixtures = [f for f in fixtures if f["league_id"] == 4338]
             
@@ -173,8 +174,13 @@ with tab_picks:
                     st.markdown(f"<div class='league-header'>{league_title}</div>", unsafe_allow_html=True)
                     for f in league_list:
                         try:
-                            kickoff = datetime.datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
-                            kickoff_display = kickoff.strftime("%a %H:%M")
+                            # Parse dates gracefully
+                            if "T" in str(f["kickoff_time"]):
+                                date_part, time_part = str(f["kickoff_time"]).split("T")
+                                dt = datetime.datetime.strptime(f"{date_part} {time_part[:5]}", "%Y-%m-%d %H:%M")
+                                kickoff_display = dt.strftime("%a %H:%M")
+                            else:
+                                kickoff_display = str(f["kickoff_time"])
                         except:
                             kickoff_display = str(f["kickoff_time"])
                         
@@ -220,12 +226,12 @@ with tab_lobby:
 with tab_admin:
     st.subheader("TheSportsDB Sync Engine")
     
-    target_season = st.text_input("Target Season String", value="2024-2025")
+    # Updated default to current active season string
+    target_season = st.text_input("Target Season String", value="2026-2027")
     
     if st.button("Run Free Fixture Refresher"):
-        # TheSportsDB public developer key is "1"
         url = "https://www.thesportsdb.com/api/v1/json/1/eventsseason.php"
-        leagues = [4328, 4338] # EPL & Scottish Premiership
+        leagues = [4328, 4338]
         
         for league_id in leagues:
             st.write(f"📡 Syncing League `{league_id}` from Free Source...")
@@ -243,7 +249,6 @@ with tab_admin:
                     gw_val = item.get("intRound")
                     if not gw_val: continue
                     
-                    # Formatting data safely for your clean design layout rows
                     fixtures_to_upsert.append({
                         "id": int(item["idEvent"]),
                         "league_id": league_id,
@@ -259,6 +264,6 @@ with tab_admin:
                 
                 if fixtures_to_upsert:
                     supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                    st.success(f"✅ Downloaded {len(fixtures_to_upsert)} matches into database!")
+                    st.success(f"✅ Downloaded {len(fixtures_to_upsert)} matches into database for League {league_id}!")
             except Exception as e:
                 st.error(f"💥 Failed processing data row: {str(e)}")
