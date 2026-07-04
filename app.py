@@ -6,14 +6,13 @@ from supabase import create_client
 # Initialize Supabase Client Connection
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-API_KEY = st.secrets["FOOTBALL_API_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 st.set_page_config(page_title="Last Man Standing", page_icon="⚽", layout="wide")
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght=400;600;800&display=swap');
 
 html, body, [data-testid="stAppViewContainer"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -134,8 +133,8 @@ with tab_picks:
                 if f.get("gameweek") is not None and int(float(f["gameweek"])) == target_gw
             ]
             
-            epl_fixtures = [f for f in fixtures if f["league_id"] == 39]
-            spfl_fixtures = [f for f in fixtures if f["league_id"] == 179]
+            epl_fixtures = [f for f in fixtures if f["league_id"] == 4328]
+            spfl_fixtures = [f for f in fixtures if f["league_id"] == 4338]
             
             available_teams = sorted(list(set(
                 [f["home_team"] for f in fixtures] + [f["away_team"] for f in fixtures]
@@ -179,8 +178,8 @@ with tab_picks:
                         except:
                             kickoff_display = str(f["kickoff_time"])
                         
-                        home_logo = f.get("home_logo") if f.get("home_logo") else "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
-                        away_logo = f.get("away_logo") if f.get("away_logo") else "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
+                        home_logo = f.get("home_logo") or "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
+                        away_logo = f.get("away_logo") or "https://img.icons8.com/ios-filled/50/ffffff/football-ball.png"
                         
                         st.markdown(f"""
                         <div class='match-row-container'>
@@ -219,56 +218,47 @@ with tab_lobby:
         st.error(f"Could not load lobby data: {lobby_err}")
 
 with tab_admin:
-    st.subheader("System Administration Panel")
+    st.subheader("TheSportsDB Sync Engine")
     
-    # Let you adjust the season year right here in the UI to prevent zero-result drops
-    target_season = st.number_input("API Target Season Year", min_value=2020, max_value=2028, value=2024, step=1)
+    target_season = st.text_input("Target Season String", value="2024-2025")
     
-    if st.button("Run Live Fixture Refresher"):
-        url = "https://v3.football.api-sports.io/fixtures"
-        headers = {
-            "x-rapidapi-key": API_KEY,
-            "x-rapidapi-host": "v3.football.api-sports.io"
-        }
-        leagues = [39, 179]
+    if st.button("Run Free Fixture Refresher"):
+        # TheSportsDB public developer key is "1"
+        url = "https://www.thesportsdb.com/api/v1/json/1/eventsseason.php"
+        leagues = [4328, 4338] # EPL & Scottish Premiership
         
         for league_id in leagues:
-            st.write(f"📡 Requesting League `{league_id}` data for season `{target_season}`...")
+            st.write(f"📡 Syncing League `{league_id}` from Free Source...")
             try:
-                response = requests.get(url, headers=headers, params={"league": league_id, "season": target_season})
+                response = requests.get(url, params={"id": league_id, "s": target_season})
                 data = response.json()
+                items = data.get("events", [])
                 
-                # Debug feedback to see exact API response info if it fails
-                if "errors" in data and data["errors"]:
-                    st.error(f"API Error Response: {data['errors']}")
+                if not items:
+                    st.warning(f"No events returned for league {league_id} in season {target_season}.")
                     continue
                     
-                items = data.get("response", [])
-                st.write(f"Found {len(items)} matches total returned from API.")
-                
                 fixtures_to_upsert = []
                 for item in items:
-                    round_str = item["league"].get("round", "")
-                    digits = ''.join(filter(str.isdigit, round_str))
-                    if not digits: continue
+                    gw_val = item.get("intRound")
+                    if not gw_val: continue
                     
+                    # Formatting data safely for your clean design layout rows
                     fixtures_to_upsert.append({
-                        "id": item["fixture"]["id"],
+                        "id": int(item["idEvent"]),
                         "league_id": league_id,
-                        "gameweek": int(digits),
-                        "kickoff_time": item["fixture"]["date"],
-                        "home_team": item["teams"]["home"]["name"],
-                        "away_team": item["teams"]["away"]["name"],
-                        "home_logo": item["teams"]["home"].get("logo"),
-                        "away_logo": item["teams"]["away"].get("logo"),
-                        "status": item["fixture"]["status"]["short"],
-                        "winner": item["teams"]["home"]["name"] if item["teams"]["home"].get("winner") is True else (item["teams"]["away"]["name"] if item["teams"]["away"].get("winner") is True else ("DRAW" if item["fixture"]["status"]["short"] == "FT" else None))
+                        "gameweek": int(gw_val),
+                        "kickoff_time": f"{item['dateEvent']}T{item.get('strTime', '00:00:00')}",
+                        "home_team": item["strHomeTeam"],
+                        "away_team": item["strAwayTeam"],
+                        "home_logo": f"https://www.thesportsdb.com/images/media/team/badge/small/{item.get('idHomeTeam')}.png",
+                        "away_logo": f"https://www.thesportsdb.com/images/media/team/badge/small/{item.get('idAwayTeam')}.png",
+                        "status": "FT" if item.get("intHomeScore") is not None else "NS",
+                        "winner": item["strHomeTeam"] if int(item.get("intHomeScore", -1)) > int(item.get("intAwayScore", -1)) else (item["strAwayTeam"] if int(item.get("intAwayScore", -1)) > int(item.get("intHomeScore", -1)) else "DRAW")
                     })
                 
                 if fixtures_to_upsert:
                     supabase.table("fixtures").upsert(fixtures_to_upsert).execute()
-                    st.success(f"✅ Successfully written {len(fixtures_to_upsert)} fixtures into database for League {league_id}!")
-                else:
-                    st.warning(f"⚠️ No matching gameweek fixtures filtered out from League {league_id}.")
+                    st.success(f"✅ Downloaded {len(fixtures_to_upsert)} matches into database!")
             except Exception as e:
-                st.error(f"💥 Processing Failure: {str(e)}")
+                st.error(f"💥 Failed processing data row: {str(e)}")
