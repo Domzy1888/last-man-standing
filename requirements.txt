@@ -2,3 +2,4 @@ streamlit
 supabase
 requests
 python-dotenv
+beautifulsoup4
